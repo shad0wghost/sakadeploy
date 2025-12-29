@@ -71,31 +71,14 @@
 function createChart(ctx, label) {
     return new Chart(ctx, {
         type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: label,
-                data: [],
-                borderColor: 'rgba(75, 192, 192, 1)',
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                borderWidth: 1.5,
-                fill: true,
-                tension: 0.4,
-                pointRadius: 0
-            }]
-        },
+        data: { labels: [], datasets: [{ label: label, data: [], borderColor: 'rgba(75, 192, 192, 1)', backgroundColor: 'rgba(75, 192, 192, 0.2)', borderWidth: 1.5, fill: true, tension: 0.4, pointRadius: 0 }] },
         options: {
-            scales: {
-                y: { beginAtZero: true, max: 100, ticks: { callback: value => value + "%" } },
-                x: { ticks: { display: false } }
-            },
+            scales: { y: { beginAtZero: true, max: 100, ticks: { callback: value => value + "%" } }, x: { ticks: { display: false } } },
             plugins: { legend: { display: false } },
-            responsive: true,
-            maintainAspectRatio: false
+            responsive: true, maintainAspectRatio: false
         }
     });
 }
-
 const cpuChart = createChart(document.getElementById('cpuChart').getContext('2d'), 'CPU Usage %');
 const ramChart = createChart(document.getElementById('ramChart').getContext('2d'), 'RAM Usage %');
 
@@ -106,8 +89,6 @@ async function updateSystemStats() {
         if (!data || data.length === 0) return;
 
         const labels = data.map(d => new Date(d.ts * 1000).toLocaleTimeString());
-        
-        // Update charts
         cpuChart.data.labels = labels;
         cpuChart.data.datasets[0].data = data.map(d => d.cpu);
         cpuChart.update('none');
@@ -116,36 +97,105 @@ async function updateSystemStats() {
         ramChart.data.datasets[0].data = data.map(d => d.ram);
         ramChart.update('none');
         
-        // Update disk progress bar
         const latestDiskUsage = data[data.length - 1].disk;
         document.getElementById('diskProgressBar').style.width = latestDiskUsage + '%';
         document.getElementById('diskUsageText').textContent = latestDiskUsage.toFixed(1) + '%';
-
     } catch (error) {
         console.error('Error fetching system stats:', error);
     }
 }
 
-
 // --- Container Management Logic ---
 async function updateContainerStatus() {
-    // ... (unchanged)
+    try {
+        const response = await fetch('/api/containers');
+        const containers = await response.json();
+        const containerListDiv = document.getElementById('container-list');
+
+        if (containers.error) {
+            containerListDiv.innerHTML = `<p class="error">Error: ${containers.details || containers.error}</p>`;
+            return;
+        }
+        if (containers.length === 0) {
+            containerListDiv.innerHTML = '<p>No containers found. Use "Redeploy" to get started.</p>';
+            return;
+        }
+
+        let html = '<table>';
+        html += '<tr><th>Service</th><th>Image</th><th>Command</th><th>Ports</th><th>Status</th><th>Actions</th></tr>';
+        containers.forEach(c => {
+            const statusClass = c.State === 'running' ? 'status-running' : 'status-stopped';
+            html += `
+                <tr>
+                    <td>${c.Service || 'N/A'}</td>
+                    <td>${c.Image || 'N/A'}</td>
+                    <td><div class="command-cell">${c.Command || 'N/A'}</div></td>
+                    <td>${c.Ports || '-'}</td>
+                    <td><span class="status-indicator ${statusClass}">${c.Status || c.State}</span></td>
+                    <td class="action-buttons">
+                        <button onclick="runContainerAction('${c.Service}', 'start')">Start</button>
+                        <button onclick="runContainerAction('${c.Service}', 'stop')">Stop</button>
+                        <button onclick="runContainerAction('${c.Service}', 'restart')">Restart</button>
+                        <button onclick="runContainerAction('${c.Service}', 'rm -f')">Delete</button>
+                        <button onclick="runDockerAction('logs', '${c.Service}')">Logs</button>
+                    </td>
+                </tr>
+            `;
+        });
+        html += '</table>';
+        containerListDiv.innerHTML = html;
+    } catch (error) {
+        console.error('Error fetching container status:', error);
+        document.getElementById('container-list').innerHTML = '<p class="error">Failed to load container status.</p>';
+    }
 }
 
 // --- Action & Output Streaming Logic ---
-// ... (unchanged)
 let eventSource = null;
-function handleStream(url) { /* ... */ }
-function runDockerAction(action, service = '') { /* ... */ }
-function runGitAction(action) { /* ... */ }
-function runContainerAction(serviceName, action) { /* ... */ }
+function handleStream(url) {
+    const outputConsole = document.getElementById('output-console');
+    outputConsole.textContent = 'Connecting to stream...\n';
 
+    if (eventSource) {
+        eventSource.close();
+    }
+    eventSource = new EventSource(url);
+    eventSource.onmessage = function(event) {
+        if (outputConsole.textContent === 'Connecting to stream...\n') {
+            outputConsole.textContent = '';
+        }
+        outputConsole.textContent += event.data + '\n';
+        outputConsole.scrollTop = outputConsole.scrollHeight;
+    };
+    eventSource.onerror = function(error) {
+        outputConsole.textContent += '\n--- Stream closed ---\n';
+        outputConsole.scrollTop = outputConsole.scrollHeight;
+        eventSource.close();
+        setTimeout(updateContainerStatus, 1000); 
+    };
+}
+
+function runDockerAction(action, service = '') {
+    let url = `/run_docker_action/${action}`;
+    if (service) {
+        url += `?service=${service}`;
+    }
+    handleStream(url);
+}
+
+function runGitAction(action) {
+    handleStream(`/run_git_action/${action}`);
+}
+
+function runContainerAction(serviceName, action) {
+    handleStream(`/api/container_action/${serviceName}/${action}`);
+}
 
 // --- Initial Load and Periodic Updates ---
 document.addEventListener('DOMContentLoaded', function() {
     updateSystemStats();
     updateContainerStatus();
-    setInterval(updateSystemStats, 5000); // Update stats every 5 seconds
+    setInterval(updateSystemStats, 5000);
     setInterval(updateContainerStatus, 3000);
 });
 </script>
