@@ -102,6 +102,13 @@ echo -e "\n${BLUE}>>> 2. Installing Python dependencies...${NC}"
 pip3 install --break-system-packages -r requirements.txt > /dev/null
 echo -e "${GREEN}   Python dependencies installed.${NC}"
 
+# --- 2b. Create Log File ---
+echo -e "\n${BLUE}>>> Creating dedicated log file...${NC}"
+touch sakadeploy.log
+chown "$SUDO_USER:$SUDO_USER" sakadeploy.log
+echo -e "${GREEN}   Log file 'sakadeploy.log' created.${NC}"
+
+
 # --- 3. Create Deployment Directory ---
 echo -e "\n${BLUE}>>> 3. Creating deployment directory...${NC}"
 mkdir -p "$DEPLOY_DIR"

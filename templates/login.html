@@ -1,10 +1,25 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h2>Login</h2>
-    <form method="post">
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required>
-        <button type="submit">Login</button>
-    </form>
+    <div id="login-form-wrapper">
+        <h2>Login</h2>
+        <form method="post" id="login-form">
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+            <button type="submit">Login</button>
+        </form>
+    </div>
+
+    <div id="loading-overlay" class="hidden">
+        <div class="spinner"></div>
+        <p>Loading repositories, please wait...</p>
+    </div>
+
+<script>
+    document.getElementById('login-form').addEventListener('submit', function() {
+        // Hide the form and show the spinner
+        document.getElementById('login-form-wrapper').classList.add('hidden');
+        document.getElementById('loading-overlay').classList.remove('hidden');
+    });
+</script>
 {% endblock %}
