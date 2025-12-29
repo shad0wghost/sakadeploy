@@ -1,8 +1,10 @@
-# CICD Management Interface
+# Sakadeploy
+
+**Repository:** https://github.com/shad0wghost/sakadeploy
 
 ## Project Overview
 
-The CICD Management Interface is a lightweight, self-hosted web application designed to simplify the continuous integration and continuous deployment (CICD) of Docker Compose-based projects on your remote server. It provides a secure, web-based control panel to manage your private GitHub repositories, deploy updates, monitor Docker container health, and view system resource utilization, all without needing direct SSH access or command-line interaction after initial setup.
+The Sakadeploy is a lightweight, self-hosted web application designed to simplify the continuous integration and continuous deployment (CICD) of Docker Compose-based projects on your remote server. It provides a secure, web-based control panel to manage your private GitHub repositories, deploy updates, monitor Docker container health, and view system resource utilization, all without needing direct SSH access or command-line interaction after initial setup.
 
 ### Key Features:
 
@@ -54,7 +56,7 @@ This project is designed to be deployed on a Linux server (tested on Debian/Ubun
     *   Create the `/var/deploy` directory for project management.
     *   Set up and start the `cicd_interface.service` as a systemd service, ensuring it runs persistently and starts on boot.
 
-3.  **Access the Web Interface:** After the script completes, it will display the URL to access your CICD Management Interface.
+3.  **Access the Web Interface:** After the script completes, it will display the URL to access your Sakadeploy.
 
     ```
     >>> You can access the web interface at: https://<YOUR_SERVER_IP>:8123
@@ -82,7 +84,7 @@ Included in this repository is a sample project called `cicd-test` designed to d
 *   **`fileserver` (Nginx):** A simple Nginx container that hosts an `index.html` file.
 *   **`webserver` (Apache):** An Apache web server container that, on startup, fetches the `index.html` from the `fileserver` and then serves it on port 80.
 
-You can use this project to test the deployment and management features of your CICD Management Interface. Simply push the `cicd-test` directory to a GitHub repository, and your interface should discover and allow you to deploy it.
+You can use this project to test the deployment and management features of your Sakadeploy. Simply push the `cicd-test` directory to a GitHub repository, and your interface should discover and allow you to deploy it.
 
 ## Troubleshooting
 
