@@ -85,7 +85,7 @@ function handleStream(url, options = {}) {
         outputConsole.scrollTop = outputConsole.scrollHeight;
     };
     eventSource.onerror = function(error) {
-        outputConsole.innerHTML += '\n--- Stream closed or error occurred ---\n';
+        outputConsole.innerHTML += '\n--- Stream closed ---\n';
         eventSource.close();
         setTimeout(updateContainerStatus, 1000); 
     };
