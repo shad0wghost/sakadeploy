@@ -168,7 +168,7 @@ PROJECT_DIR=$(pwd)
 SERVICE_USER=${SUDO_USER:-root}
 cat > "$SERVICE_FILE" << EOL
 [Unit]
-Description=Sakadeploy CICD Interface
+Description=SakaDeploy CI/CD management interface
 After=network.target
 [Service]
 User=$SERVICE_USER

@@ -1,4 +1,4 @@
-# Sakadeploy
+# SakaDeploy CI/CD management interface
 
 **Repository:** https://github.com/shad0wghost/sakadeploy
 

@@ -3,13 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CICD Management Interface</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>SakaDeploy CI/CD management interface</title>
 </head>
 <body>
     <header>
-        <h1>CICD Management Interface</h1>
+        <h1>SakaDeploy CI/CD management interface</h1>
         {% if session.logged_in %}
             <nav>
                 <a href="{{ url_for('select_repo') }}">Select Repository</a> |
