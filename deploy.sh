@@ -2,7 +2,7 @@
 # deploy.sh - Automated setup script for the CICD Management Interface
 # Must be run with sudo: sudo bash deploy.sh
 
-# --- Safety First: Exit on any error ---
+# --- Safety First: Exit on any error --- 
 set -e
 
 # --- Check for root privileges ---
