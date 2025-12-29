@@ -111,14 +111,32 @@ echo -e "${GREEN}   Deployment directory '$DEPLOY_DIR' created.${NC}"
 # --- 4. Configure Application ---
 echo -e "\n${BLUE}>>> 4. Configuring the application...${NC}"
 CONFIG_FILE="config.py"
+# Prompt for GitHub PAT
 while true; do
-    read -sp "   Enter your GitHub Personal Access Token: " GITHUB_PAT; echo
-    if [[ -z "$GITHUB_PAT" ]]; then echo -e "${RED}   PAT cannot be empty.${NC}"; continue; fi
-    echo -e "${WHITE}   Validating GitHub PAT...${NC}"
-    if curl -s -H "Authorization: token $GITHUB_PAT" https://api.github.com/user | grep -q "login"; then
-        echo -e "${GREEN}   GitHub PAT is valid.${NC}"; break
+    echo -e "\n${YELLOW}   Please enter your GitHub Personal Access Token (PAT). This token requires 'repo' scope.${NC}"
+    read -sp "   GitHub PAT: " GITHUB_PAT
+    echo
+    if [[ -z "$GITHUB_PAT" ]]; then
+        echo -e "${RED}   PAT cannot be empty. Please try again.${NC}"
+        continue
+    fi
+
+    echo -e "${WHITE}   Validating GitHub PAT via API call...${NC}"
+    # Use curl to test the token. -s is for silent, -o /dev/null discards body, -w "%{\http_code}" gets status code.
+    HTTP_STATUS=$(curl -s -o /dev/null -w "%{\http_code}" -H "Authorization: token $GITHUB_PAT" https://api.github.com/user)
+
+    if [ "$HTTP_STATUS" -eq 200 ]; then
+        echo -e "${GREEN}   Success! GitHub PAT is valid and authenticated correctly.${NC}"
+        break
     else
-        echo -e "${RED}   Invalid GitHub PAT. Please try again.${NC}"
+        echo -e "${RED}   Validation Failed! GitHub API responded with HTTP Status: $HTTP_STATUS${NC}"
+        if [ "$HTTP_STATUS" -eq 401 ]; then
+            echo -e "${RED}   This is a 'Bad Credentials' error. Please check your token for typos, expiration, or incorrect scopes.${NC}"
+            echo -e "${YELLOW}   Note: If using SSO, ensure the token is authorized for your organization.${NC}"
+        else
+            echo -e "${RED}   Please check your network connection and the PAT itself.${NC}"
+        fi
+        echo -e "${YELLOW}   Please try again.${NC}"
     fi
 done
 while true; do
