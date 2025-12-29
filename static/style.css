@@ -1,0 +1,119 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f2f5;
+    color: #333;
+    line-height: 1.6;
+}
+
+header {
+    background-color: #ffffff;
+    color: #333;
+    padding: 1em 2em;
+    text-align: center;
+    border-bottom: 1px solid #dee2e6;
+}
+
+header h1 { margin: 0; }
+nav { margin-top: 10px; }
+nav a { color: #007bff; text-decoration: none; margin: 0 10px; }
+nav a:hover { text-decoration: underline; }
+
+main {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 20px auto;
+}
+
+h2, h3 {
+    color: #343a40;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 10px;
+    margin-top: 20px;
+}
+
+/* Base styles for all sections */
+.monitoring-section, .container-section, .controls-section, .output-section {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
+}
+
+/* Charts */
+.charts-container {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+.chart-wrapper {
+    position: relative;
+    height: 300px;
+    flex: 1;
+    min-width: 300px;
+}
+
+/* Container Status Table */
+#container-list table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+#container-list th, #container-list td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #dee2e6;
+}
+#container-list th {
+    background-color: #f8f9fa;
+}
+.status-indicator {
+    padding: 5px 10px;
+    border-radius: 12px;
+    color: white;
+    font-weight: bold;
+    font-size: 0.9em;
+}
+.status-running { background-color: #28a745; }
+.status-stopped { background-color: #6c757d; }
+.error { color: #dc3545; }
+
+/* Buttons */
+button {
+    background-color: #007bff;
+    color: white;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+button:hover { background-color: #0056b3; }
+
+.main-controls, .action-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+.action-buttons button { font-size: 12px; padding: 5px 10px; }
+
+/* Output Console */
+#output-console {
+    background-color: #1e1e1e;
+    color: #f8f8f2;
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    padding: 15px;
+    border-radius: 5px;
+    height: 400px;
+    overflow-y: scroll;
+    white-space: pre-wrap;
+    margin-top: 15px;
+    border: 1px solid #333;
+}
+
+footer {
+    text-align: center;
+    padding: 20px;
+    margin-top: 30px;
+    color: #6c757d;
+}

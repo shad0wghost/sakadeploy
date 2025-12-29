@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h2>Dashboard for: {{ selected_repo }}</h2>
+
+    <!-- System Resource Monitoring -->
+    <div class="monitoring-section">
+        <h3>System Monitoring</h3>
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <canvas id="cpuChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="ramChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="diskChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container Management -->
+    <div class="container-section">
+        <h3>Container Management</h3>
+        <div id="container-list">
+            <!-- Container statuses will be dynamically inserted here -->
+        </div>
+    </div>
+    
+    <!-- Main CICD Controls -->
+    <div class="controls-section">
+        <h3>Deployment Controls</h3>
+        <div class="main-controls">
+            <button onclick="runGlobalAction('deploy')">Redeploy</button>
+            <button onclick="runGlobalAction('stop')">Stop All</button>
+            <button onclick="runGlobalAction('prune')">Prune (Down)</button>
+            <button onclick="runGlobalAction('build_no_cache')">Build (No Cache)</button>
+            <button onclick="runGlobalAction('logs')">View All Logs</button>
+        </div>
+    </div>
+
+    <!-- Live Output Console -->
+    <div class="output-section">
+        <h3>Live Output</h3>
+        <pre id="output-console"></pre>
+    </div>
+
+<script>
+// --- Charting Logic ---
+const cpuChartCtx = document.getElementById('cpuChart').getContext('2d');
+const ramChartCtx = document.getElementById('ramChart').getContext('2d');
+const diskChartCtx = document.getElementById('diskChart').getContext('2d');
+
+function createChart(ctx, label) {
+    return new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: label,
+                data: [],
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) { return value + "%" }
+                    }
+                },
+                x: {
+                    ticks: {
+                        display: false // Hide x-axis labels for cleanliness
+                    }
+                }
+            },
+            plugins: { legend: { display: false } },
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+}
+
+const cpuChart = createChart(cpuChartCtx, 'CPU Usage %');
+const ramChart = createChart(ramChartCtx, 'RAM Usage %');
+const diskChart = createChart(diskChartCtx, 'Disk Usage %');
+
+async function updateCharts() {
+    try {
+        const response = await fetch('/api/system_stats');
+        const data = await response.json();
+
+        const labels = data.map(d => new Date(d.ts * 1000).toLocaleTimeString());
+        const cpuData = data.map(d => d.cpu);
+        const ramData = data.map(d => d.ram);
+        const diskData = data.map(d => d.disk);
+
+        cpuChart.data.labels = labels;
+        cpuChart.data.datasets[0].data = cpuData;
+        cpuChart.update('none');
+
+        ramChart.data.labels = labels;
+        ramChart.data.datasets[0].data = ramData;
+        ramChart.update('none');
+
+        diskChart.data.labels = labels;
+        diskChart.data.datasets[0].data = diskData;
+        diskChart.update('none');
+
+    } catch (error) {
+        console.error('Error fetching system stats:', error);
+    }
+}
+
+
+// --- Container Management Logic ---
+async function updateContainerStatus() {
+    try {
+        const response = await fetch('/api/containers');
+        const containers = await response.json();
+        const containerListDiv = document.getElementById('container-list');
+
+        if (containers.error) {
+            containerListDiv.innerHTML = `<p class="error">Error: ${containers.details || containers.error}</p>`;
+            return;
+        }
+
+        if (containers.length === 0) {
+            containerListDiv.innerHTML = '<p>No containers found for this project.</p>';
+            return;
+        }
+
+        let html = '<table>';
+        html += '<tr><th>Service</th><th>Status</th><th>Actions</th></tr>';
+        
+        containers.forEach(c => {
+            const statusClass = c.State === 'running' ? 'status-running' : 'status-stopped';
+            html += `
+                <tr>
+                    <td>${c.Service}</td>
+                    <td><span class="status-indicator ${statusClass}">${c.State}</span></td>
+                    <td class="action-buttons">
+                        <button onclick="runContainerAction('${c.Service}', 'start')">Start</button>
+                        <button onclick="runContainerAction('${c.Service}', 'stop')">Stop</button>
+                        <button onclick="runContainerAction('${c.Service}', 'restart')">Restart</button>
+                        <button onclick="runContainerAction('${c.Service}', 'rm -f')">Delete</button>
+                        <button onclick="runGlobalAction('logs', '${c.Service}')">Logs</button>
+                    </td>
+                </tr>
+            `;
+        });
+        html += '</table>';
+        containerListDiv.innerHTML = html;
+    } catch (error) {
+        console.error('Error fetching container status:', error);
+        document.getElementById('container-list').innerHTML = '<p class="error">Failed to load container status.</p>';
+    }
+}
+
+
+// --- Action & Output Streaming Logic ---
+let eventSource = null;
+
+function handleStream(url, options = {}) {
+    const outputConsole = document.getElementById('output-console');
+    outputConsole.innerHTML = ''; // Clear console on new action
+
+    if (eventSource) {
+        eventSource.close();
+    }
+
+    eventSource = new EventSource(url, options);
+
+    eventSource.onmessage = function(event) {
+        outputConsole.innerHTML += event.data.replace(/\\n/g, '\n');
+        outputConsole.scrollTop = outputConsole.scrollHeight;
+    };
+
+    eventSource.onerror = function(error) {
+        console.error('EventSource failed:', error);
+        outputConsole.innerHTML += '\n--- Stream closed or error occurred ---\n';
+        eventSource.close();
+        // After an action, refresh container status
+        setTimeout(updateContainerStatus, 1000); 
+    };
+}
+
+function runGlobalAction(action, service = '') {
+    let url = `/run_action/${action}`;
+    if (service) {
+        url += `?service=${service}`;
+    }
+    handleStream(url, { method: 'POST' });
+}
+
+function runContainerAction(serviceName, action) {
+    handleStream(`/api/container_action/${serviceName}/${action}`, { method: 'POST' });
+}
+
+
+// --- Initial Load and Periodic Updates ---
+window.onload = function() {
+    updateCharts();
+    updateContainerStatus();
+    setInterval(updateCharts, 5000); // Update charts every 5 seconds
+    setInterval(updateContainerStatus, 10000); // Update container status every 10 seconds
+};
+
+</script>
+{% endblock %}
