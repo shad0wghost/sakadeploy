@@ -193,6 +193,7 @@ sleep 3
 systemctl status cicd_interface.service --no-pager || echo -e "${RED}Error retrieving service status.${NC}"
 IP_ADDRESS=$(curl -s ifconfig.me)
 echo -e "\n${GREEN}>>> Access the web interface at: ${NC}${YELLOW}https://${IP_ADDRESS}:8123${NC}"
-echo -e "${WHITE}>>> To view live logs, run: ${NC}${CYAN}journalctl -u cicd_interface.service -f${NC}"
+echo -e "${WHITE}>>> To view live application logs (Python errors and debug info), run: ${NC}${CYAN}tail -f /root/sakadeploy/sakadeploy.log${NC}"
+echo -e "${WHITE}>>> To view system service logs, run: ${NC}${CYAN}journalctl -u cicd_interface.service -f${NC}"
 
 exit 0
