@@ -41,17 +41,14 @@ def collect_system_stats():
     while not stop_stats_thread.is_set():
         try:
             time.sleep(STATS_INTERVAL_SECONDS)
-            
             cpu = psutil.cpu_percent()
             ram = psutil.virtual_memory().percent
             disk = psutil.disk_usage('/').percent
             timestamp = int(time.time())
-            
             current_net_io = psutil.net_io_counters()
             bytes_sent = current_net_io.bytes_sent - last_net_io.bytes_sent
             bytes_recv = current_net_io.bytes_recv - last_net_io.bytes_recv
             last_net_io = current_net_io
-            
             mbps_sent = (bytes_sent * 8) / (STATS_INTERVAL_SECONDS * 1024 * 1024)
             mbps_recv = (bytes_recv * 8) / (STATS_INTERVAL_SECONDS * 1024 * 1024)
             
@@ -65,13 +62,11 @@ def collect_system_stats():
                 with open(STATS_FILE, 'r') as f:
                     lines.extend(f.readlines())
             lines.append(line + '\n')
-            
             with open(STATS_FILE, 'w') as f:
                 f.writelines(lines)
         except Exception as e:
             logging.error("Error in stats collection thread:", exc_info=True)
             time.sleep(STATS_INTERVAL_SECONDS)
-
 
 # --- Authentication & Login ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -184,7 +179,7 @@ def api_containers():
                 try:
                     container_data = json.loads(line)
                     project_label = container_data.get('Labels', {}).get('com.docker.compose.project', '')
-                    container_data['is_project_container'] = (selected_project is not None and project_label == selected_project)
+                    container_data['is_project_container'] = (selected_project is not None and project_label.lower() == selected_project.lower())
                     containers.append(container_data)
                 except json.JSONDecodeError:
                     logging.warning(f"Could not decode JSON line from docker ps: {line}")
@@ -271,7 +266,7 @@ def run_git_action(action):
                 yield f"data: Successfully deleted {deploy_path}.\n\n"
             else:
                 yield "data: Directory does not exist.\n\n"
-            yield "data: \n--- Deletion complete ---\n\n"
+            yield f"data: \n--- Deletion complete ---\n\n"
     return action_streamer(generator)
 
 @app.route('/run_docker_action/<action>', methods=['GET'])
@@ -283,7 +278,10 @@ def run_docker_action(action):
     repo_full_name = session.get('repo_full_name')
     deploy_path = os.path.join('/var/deploy', repo_name)
     def generator():
-        os.makedirs(deploy_path, exist_ok=True)
+        #makedirs is safe to call even if the directory exists
+        if repo_name:
+            os.makedirs(deploy_path, exist_ok=True)
+            
         if action == 'redeploy':
             if not repo_full_name:
                 yield "data: Error: Repo full name not in session.\n\n"
@@ -297,7 +295,7 @@ def run_docker_action(action):
                 yield f"data: Step 1: Pulling latest changes...\n\n"
                 yield from stream_process(['git', 'pull'], cwd=deploy_path)
             yield "data: \n--- Step 2: Building and starting containers ---\n\n"
-            yield from stream_process(['docker', 'compose', '-f', 'docker-compose.yml', 'up', '--build', '-d'], cwd=deploy_path)
+            yield from stream_process(['docker', 'compose', '-f', os.path.join(deploy_path, 'docker-compose.yml'), 'up', '--build', '-d'], cwd=deploy_path)
             yield "data: \n--- Redeployment complete ---\n\n"
         elif action == 'logs':
             if not repo_name:
@@ -323,6 +321,7 @@ def run_docker_action(action):
                  yield f"data: --- Running global command: '{' '.join(full_cmd)}' ---\n\n"
                  yield from stream_process(full_cmd)
              else:
+                 # Project-specific docker-compose commands
                  full_cmd = ['docker', 'compose', '-f', os.path.join(deploy_path, 'docker-compose.yml')] + cmd_map[action]
                  yield f"data: --- Running 'docker-compose {action}' ---\n\n"
                  yield from stream_process(full_cmd, cwd=deploy_path)

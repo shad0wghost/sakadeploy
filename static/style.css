@@ -32,9 +32,13 @@ h2, h3 {
     padding-bottom: 10px;
     margin-top: 20px;
 }
+.repo-subtitle {
+    font-size: 0.8em;
+    color: #6c757d;
+}
 
 /* Base styles for all sections */
-.monitoring-section, .container-section {
+.monitoring-section, .container-section, .controls-section {
     background-color: #ffffff;
     padding: 20px;
     border-radius: 8px;
@@ -55,22 +59,20 @@ h2, h3 {
 
 /* Charts */
 .charts-container {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 20px;
-    flex-wrap: wrap;
     align-items: center;
 }
-.chart-wrapper {
+.chart-wrapper, .disk-wrapper {
     position: relative;
     height: 200px;
-    flex: 1;
-    min-width: 250px;
 }
-.disk-wrapper {
-    flex: 1;
-    min-width: 250px;
+.chart-wrapper h4, .disk-wrapper h4 {
     text-align: center;
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #495057;
 }
 .progress-bar-container {
     width: 100%;
@@ -89,17 +91,18 @@ h2, h3 {
     margin-top: 5px;
     font-weight: bold;
     display: block;
+    text-align: center;
 }
-
 
 /* Container Status Table */
 #container-list table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 15px;
+    font-size: 0.9em;
 }
-#container-list td {
-    padding: 12px;
+#container-list td, #container-list th {
+    padding: 10px;
     text-align: left;
     border-bottom: 1px solid #dee2e6;
     vertical-align: middle;
@@ -123,7 +126,7 @@ h2, h3 {
     color: white;
     font-weight: bold;
     font-size: 0.9em;
-    display: inline-block; /* Ensure padding is respected */
+    display: inline-block;
 }
 .status-running { background-color: #28a745; }
 .status-stopped { background-color: #6c757d; }
@@ -140,19 +143,20 @@ button {
     font-size: 14px;
     transition: background-color 0.2s;
 }
-button:hover { background-color: #0056b3; }
+button:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+button:hover:not(:disabled) { background-color: #0056b3; }
 
 .main-controls, .action-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 .action-buttons button { font-size: 12px; padding: 5px 10px; }
 .btn-danger { background-color: #dc3545; }
-.btn-danger:hover { background-color: #c82333; }
+.btn-danger:hover:not(:disabled) { background-color: #c82333; }
 .controls-wrapper {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 20px;
-    flex-wrap: wrap;
-}
-.controls-wrapper > .controls-section {
-    flex: 1;
 }
 
 /* Output Console */
@@ -201,6 +205,16 @@ footer {
     margin-top: 20px;
     font-size: 1.1em;
 }
+.flashes {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 20px;
+}
+.flashes li {
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid;
+}
 .flashes .info {
     background-color: #e2e3e5;
     color: #383d41;
@@ -245,5 +259,3 @@ footer {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
-
-

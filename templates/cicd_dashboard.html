@@ -36,13 +36,31 @@
             <button onclick="updateContainerStatus()" class="refresh-btn">Refresh Containers</button>
         </div>
         <div id="container-list">
-            <!-- Container statuses will be dynamically inserted here -->
+            <p>Loading container data...</p>
         </div>
     </div>
     
-    <!-- Control Panels (Project-Specific) -->
+    <!-- Control Panels -->
     <div class="controls-wrapper">
-        <!-- ... (rest of the file is unchanged) -->
+        <div class="controls-section">
+            <h3>Project Deployment Controls <span class="repo-subtitle">{% if selected_repo %}({{ selected_repo }}){% else %}(No Project Selected){% endif %}</span></h3>
+            <div class="main-controls">
+                <button onclick="runGitAction('pull')">Git Pull</button>
+                <button onclick="runDockerAction('redeploy')">Redeploy (Pull & Build)</button>
+                <button onclick="runDockerAction('start')">Start Project</button>
+                <button onclick="runDockerAction('stop')">Stop Project</button>
+                <button onclick="runDockerAction('prune')">Prune Project</button>
+                <button onclick="runDockerAction('build_no_cache')">Build (No Cache)</button>
+                <button onclick="runDockerAction('logs')">Project Logs</button>
+            </div>
+        </div>
+        <div class="controls-section">
+            <h3>Global System Controls</h3>
+            <div class="main-controls">
+                <button onclick="if(confirm('Are you sure you want to remove ALL unused Docker images on this system? This can affect other projects.')) runDockerAction('prune_images')" class="btn-danger">Prune All Images</button>
+                <button onclick="if(confirm('Are you sure you want to permanently delete the local repository folder for the selected project? This cannot be undone.')) runGitAction('delete_repo')" class="btn-danger">Delete Local Repo</button>
+            </div>
+        </div>
     </div>
 
     <!-- Live Output Console -->
@@ -82,7 +100,6 @@ const netChart = new Chart(document.getElementById('netChart').getContext('2d'),
     }
 });
 
-
 async function updateSystemStats() {
     try {
         const response = await fetch('/api/system_stats');
@@ -111,7 +128,6 @@ async function updateSystemStats() {
         console.error('Error fetching system stats:', error);
     }
 }
-
 
 // --- Container Management Logic (with Highlighting) ---
 async function updateContainerStatus() {
@@ -160,10 +176,46 @@ async function updateContainerStatus() {
     }
 }
 
-// --- Action & Output Streaming Logic --- (unchanged)
-// ...
+// --- Action & Output Streaming Logic ---
+let eventSource = null;
+function handleStream(url) {
+    const outputConsole = document.getElementById('output-console');
+    outputConsole.textContent = 'Connecting to stream...\n';
 
-// --- Initial Load and Periodic Updates --- (unchanged)
-// ...
+    if (eventSource) { eventSource.close(); }
+    eventSource = new EventSource(url);
+    eventSource.onmessage = function(event) {
+        if (outputConsole.textContent === 'Connecting to stream...\n') { outputConsole.textContent = ''; }
+        outputConsole.textContent += event.data;
+        outputConsole.scrollTop = outputConsole.scrollHeight;
+    };
+    eventSource.onerror = function(error) {
+        outputConsole.textContent += '\n--- Stream closed ---\n';
+        outputConsole.scrollTop = outputConsole.scrollHeight;
+        eventSource.close();
+        setTimeout(updateContainerStatus, 1000); 
+    };
+}
+
+// Project-specific actions
+function runDockerAction(action) {
+    handleStream(`/run_docker_action/${action}`);
+}
+function runGitAction(action) {
+    handleStream(`/run_git_action/${action}`);
+}
+
+// Global container-specific actions
+function runContainerAction(containerId, action) {
+    handleStream(`/api/container_action/${containerId}/${action}`);
+}
+
+// --- Initial Load and Periodic Updates ---
+document.addEventListener('DOMContentLoaded', function() {
+    updateSystemStats();
+    updateContainerStatus();
+    setInterval(updateSystemStats, 1000);
+    setInterval(updateContainerStatus, 1000);
+});
 </script>
 {% endblock %}
