@@ -96,6 +96,16 @@ button:hover { background-color: #0056b3; }
 
 .main-controls, .action-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 .action-buttons button { font-size: 12px; padding: 5px 10px; }
+.btn-danger { background-color: #dc3545; }
+.btn-danger:hover { background-color: #c82333; }
+.controls-wrapper {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+.controls-wrapper > .controls-section {
+    flex: 1;
+}
 
 /* Output Console */
 #output-console {
