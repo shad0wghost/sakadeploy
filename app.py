@@ -31,7 +31,7 @@ STATS_FILE = 'system_stats.log'
 MAX_STATS_LINES = 1000
 STATS_INTERVAL_SECONDS = 2
 
-# --- System Stats Background Thread (with Network I/O) ---
+# --- System Stats Background Thread ---
 stats_thread = None
 stop_stats_thread = threading.Event()
 last_net_io = psutil.net_io_counters()
@@ -181,11 +181,15 @@ def api_containers():
                     # FIX: Manually parse the labels string
                     labels_str = container_data.get('Labels', '')
                     project_label = ''
+                    service_label = ''
                     for label in labels_str.split(','):
                         if 'com.docker.compose.project=' in label:
                             project_label = label.split('=')[-1]
-                            break
+                        if 'com.docker.compose.service=' in label:
+                            service_label = label.split('=')[-1]
+
                     container_data['is_project_container'] = (selected_project is not None and project_label.lower() == selected_project.lower())
+                    container_data['compose_service'] = service_label # Add the service name to the data
                     containers.append(container_data)
                 except json.JSONDecodeError:
                     logging.warning(f"Could not decode JSON line from docker ps: {line}")
@@ -219,8 +223,22 @@ def action_streamer(action_generator):
 @app.route('/api/container_action/<container_id>/<action>', methods=['GET'])
 @login_required
 def api_container_action(container_id, action):
+    service_name = request.args.get('service_name')
+    repo_name = session.get('selected_repo')
+
     def generator():
-        if action == 'rm':
+        if action == 'rebuild':
+            if not repo_name or not service_name:
+                yield "data: Error: A project and service must be selected to rebuild.\n\n"
+                return
+            deploy_path = os.path.join('/var/deploy', repo_name)
+            compose_file = os.path.join(deploy_path, 'docker-compose.yml')
+            yield f"data: --- Step 1: Rebuilding service '{service_name}' with no cache ---\n\n"
+            yield from stream_process(['docker', 'compose', '-f', compose_file, 'build', '--no-cache', service_name], cwd=deploy_path)
+            yield f"data: \n--- Step 2: Re-creating and starting service '{service_name}' ---\n\n"
+            yield from stream_process(['docker', 'compose', '-f', compose_file, 'up', '-d', '--force-recreate', service_name], cwd=deploy_path)
+            yield f"data: \n--- Rebuild of '{service_name}' complete ---\n\n"
+        elif action == 'rm':
             yield f"data: --- Stopping container {container_id[:12]} ---\n\n"
             yield from stream_process(['docker', 'stop', container_id])
             yield f"data: --- Removing container {container_id[:12]} ---\n\n"
@@ -279,7 +297,7 @@ def run_git_action(action):
 @login_required
 def run_docker_action(action):
     repo_name = session.get('selected_repo')
-    if not repo_name and action not in ['prune_images']:
+    if not repo_name and action not in ['prune_images', 'prune_containers']:
          return Response("data: Error: No repository selected. Please select one first.\n\n", mimetype='text/event-stream')
     repo_full_name = session.get('repo_full_name')
     deploy_path = os.path.join('/var/deploy', repo_name)
@@ -300,7 +318,7 @@ def run_docker_action(action):
                 yield f"data: Step 1: Pulling latest changes...\n\n"
                 yield from stream_process(['git', 'pull'], cwd=deploy_path)
             yield "data: \n--- Step 2: Building and starting containers ---\n\n"
-            yield from stream_process(['docker', 'compose', '-f', os.path.join(deploy_path, 'docker-compose.yml'), 'up', '--build', '-d'], cwd=deploy_path)
+            yield from stream_process(['docker', 'compose', '-f', os.path.join(deploy_path, 'docker-compose.yml'), 'up', '--build', '-d', '--force-recreate'], cwd=deploy_path)
             yield "data: \n--- Redeployment complete ---\n\n"
         elif action == 'logs':
             if not repo_name:
@@ -316,21 +334,19 @@ def run_docker_action(action):
                 'prune': ['down', '--remove-orphans'],
                 'build_no_cache': ['build', '--no-cache'],
                 'prune_images': ['image', 'prune', '-a', '-f'],
-                'prune_containers': ['container', 'prune', '-f'] # Added for global container prune
+                'prune_containers': ['container', 'prune', '-f']
              }
              if action not in cmd_map:
                  yield "data: Error: Unknown command.\n\n"
                  return
              
              if action == 'prune_images' or action == 'prune_containers':
-                 # These are global docker commands
                  full_cmd = ['docker'] + cmd_map[action]
                  yield f"data: --- Running global command: '{' '.join(full_cmd)}' ---\n\n"
                  if action == 'prune_containers':
-                     # Also stop all running containers first for a full clean
                      yield "data: --- Stopping all running containers first ---\n\n"
                      yield from stream_process(['docker', 'stop', '$(docker ps -q)'], cwd='/')
-                 yield from stream_process(full_cmd, cwd='/')
+                 yield from stream_process(full_cmd)
              else:
                  # Project-specific docker-compose commands
                  full_cmd = ['docker', 'compose', '-f', os.path.join(deploy_path, 'docker-compose.yml')] + cmd_map[action]

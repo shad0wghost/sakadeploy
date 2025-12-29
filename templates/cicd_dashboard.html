@@ -153,6 +153,13 @@ async function updateContainerStatus() {
             const statusClass = isRunning ? 'status-running' : 'status-stopped';
             const projectClass = c.is_project_container ? 'project-container-row' : '';
             const containerId = c.ID;
+            const serviceName = c.compose_service;
+            
+            let rebuildButton = '';
+            if (projectClass && serviceName) {
+                rebuildButton = `<button onclick="runContainerAction('${containerId}', 'rebuild', '${serviceName}')">Rebuild</button>`;
+            }
+
             html += `
                 <tr class="${projectClass}">
                     <td>${c.Names || 'N/A'}</td>
@@ -164,6 +171,7 @@ async function updateContainerStatus() {
                         <button onclick="runContainerAction('${containerId}', 'stop')" ${!isRunning ? 'disabled' : ''}>Stop</button>
                         <button onclick="runContainerAction('${containerId}', 'restart')">Restart</button>
                         <button onclick="runContainerAction('${containerId}', 'logs')">Logs</button>
+                        ${rebuildButton}
                         <button onclick="if(confirm('Are you sure you want to stop and remove this container?')) runContainerAction('${containerId}', 'rm')" class="btn-danger">Delete</button>
                     </td>
                 </tr>
@@ -187,8 +195,7 @@ function handleStream(url) {
     eventSource = new EventSource(url);
     eventSource.onmessage = function(event) {
         if (outputConsole.textContent === 'Connecting to stream...\n') { outputConsole.textContent = ''; }
-        // Append the data, converting newlines to <br> and adding an extra <br> per message for consistent wrapping
-        outputConsole.innerHTML += event.data.replace(/\n/g, '<br>') + '<br>';
+        outputConsole.textContent += event.data;
         outputConsole.scrollTop = outputConsole.scrollHeight;
     };
     eventSource.onerror = function(error) {
@@ -208,8 +215,12 @@ function runGitAction(action) {
 }
 
 // Global container-specific actions
-function runContainerAction(containerId, action) {
-    handleStream(`/api/container_action/${containerId}/${action}`);
+function runContainerAction(containerId, action, serviceName = '') {
+    let url = `/api/container_action/${containerId}/${action}`;
+    if (serviceName) {
+        url += `?service_name=${serviceName}`;
+    }
+    handleStream(url);
 }
 
 // --- Initial Load and Periodic Updates ---
