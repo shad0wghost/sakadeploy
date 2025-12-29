@@ -5,7 +5,10 @@
 
     <!-- Container Management -->
     <div class="container-section">
-        <h3>Container Management</h3>
+        <div class="container-header">
+            <h3>Container Management</h3>
+            <button onclick="updateContainerStatus()" class="refresh-btn">Refresh Containers</button>
+        </div>
         <div id="container-list">
             <!-- Container statuses will be dynamically inserted here -->
         </div>
@@ -58,25 +61,51 @@ async function updateContainerStatus() {
             return;
         }
 
-        let html = '<table>';
-        html += '<tr><th>Service</th><th>Status</th><th>Actions</th></tr>';
-        containers.forEach(c => {
-            const statusClass = c.State === 'running' ? 'status-running' : 'status-stopped';
-            html += `
-                <tr>
-                    <td>${c.Service}</td>
-                    <td><span class="status-indicator ${statusClass}">${c.State}</span></td>
-                    <td class="action-buttons">
-                        <button onclick="runContainerAction('${c.Service}', 'start')">Start</button>
-                        <button onclick="runContainerAction('${c.Service}', 'stop')">Stop</button>
-                        <button onclick="runContainerAction('${c.Service}', 'restart')">Restart</button>
-                        <button onclick="runContainerAction('${c.Service}', 'rm -f')">Delete</button>
-                        <button onclick="runDockerAction('logs', '${c.Service}')">Logs</button>
-                    </td>
-                </tr>
-            `;
-        });
-        html += '</table>';
+                let html = '<table>';
+
+                html += '<tr><th>Service</th><th>Image</th><th>Command</th><th>Ports</th><th>Status</th><th>Actions</th></tr>';
+
+                
+
+                containers.forEach(c => {
+
+                    const statusClass = c.State === 'running' ? 'status-running' : 'status-stopped';
+
+                    html += `
+
+                        <tr>
+
+                            <td>${c.Service}</td>
+
+                            <td>${c.Image || 'N/A'}</td>
+
+                            <td>${c.Command || 'N/A'}</td>
+
+                            <td>${c.Ports || '-'}</td>
+
+                            <td><span class="status-indicator ${statusClass}">${c.Status || c.State}</span></td>
+
+                            <td class="action-buttons">
+
+                                <button onclick="runContainerAction('${c.Service}', 'start')">Start</button>
+
+                                <button onclick="runContainerAction('${c.Service}', 'stop')">Stop</button>
+
+                                <button onclick="runContainerAction('${c.Service}', 'restart')">Restart</button>
+
+                                <button onclick="runContainerAction('${c.Service}', 'rm -f')">Delete</button>
+
+                                <button onclick="runDockerAction('logs', '${c.Service}')">Logs</button>
+
+                            </td>
+
+                        </tr>
+
+                    `;
+
+                });
+
+                html += '</table>';
         containerListDiv.innerHTML = html;
     } catch (error) {
         console.error('Error fetching container status:', error);
@@ -99,8 +128,8 @@ function handleStream(url) {
         if (outputConsole.innerHTML === 'Connecting to stream...\n') {
             outputConsole.innerHTML = '';
         }
-        // This is the definitive fix for terminal wrapping
-        outputConsole.appendChild(document.createTextNode(event.data));
+        // Append the data and explicitly add a newline for consistent wrapping
+        outputConsole.innerHTML += event.data + '\n';
         outputConsole.scrollTop = outputConsole.scrollHeight;
     };
     eventSource.onerror = function(error) {

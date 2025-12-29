@@ -125,7 +125,24 @@ def api_containers():
         if result.returncode != 0:
             logging.error(f"Docker compose ps failed: {result.stderr}")
             return jsonify({'error': 'Failed to get container status', 'details': result.stderr}), 500
-        containers = [json.loads(line) for line in result.stdout.strip().split('\n') if line]
+        containers = []
+        raw_output_lines = result.stdout.strip().split('\n')
+        for line in raw_output_lines:
+            if line:
+                try:
+                    c = json.loads(line)
+                    containers.append({
+                        'Service': c.get('Service'),
+                        'Name': c.get('Name'),
+                        'ID': c.get('ID'),
+                        'Image': c.get('Image'),
+                        'Command': c.get('Command'),
+                        'State': c.get('State'),
+                        'Status': c.get('Status'), # Detailed status like 'Up 5 seconds'
+                        'Ports': c.get('Ports', '') # Port mappings
+                    })
+                except json.JSONDecodeError:
+                    logging.warning(f"Could not decode JSON line from docker compose ps: {line}")
         return jsonify(containers)
     except Exception as e:
         logging.error("Error in /api/containers:", exc_info=True)
