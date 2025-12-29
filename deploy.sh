@@ -21,7 +21,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo -e "${CYAN}----------------------------------------------------${NC}"
-echo -e "${CYAN}  CICD Management Interface Automated Setup Script  ${NC}"
+echo -e "${CYAN}  Sakadeploy CICD Automated Setup Script  ${NC}"
 echo -e "${CYAN}----------------------------------------------------${NC}"
 
 # --- 1. Install System Dependencies (Docker, Docker Compose, Python) ---

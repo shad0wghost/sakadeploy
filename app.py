@@ -80,9 +80,21 @@ def select_repo():
     g = Github(config.GITHUB_PAT)
     try:
         user = g.get_user()
-        repos = [repo for repo in user.get_repos() if 'docker-compose.yml' in [f.name for f in repo.get_contents('/')]]
+        repos = []
+        for repo in user.get_repos():
+            try:
+                # Attempt to get contents to catch empty repos with 404, but don't filter by content
+                repo.get_contents('/')
+                repos.append(repo)
+            except GithubException as e:
+                # Gracefully skip repositories that are empty
+                if e.status == 404 and "This repository is empty" in e.data.get("message", ""):
+                    continue  # Ignore and continue to the next repo
+                else:
+                    # For other API errors, flash a message
+                    flash(f"Error checking repository {repo.name}: {e.data.get('message', str(e))}")
     except Exception as e:
-        flash(f"Error fetching repositories: {e}")
+        flash(f"Error fetching repository list: {e}")
         repos = []
         
     if request.method == 'POST':
