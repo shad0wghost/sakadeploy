@@ -315,17 +315,24 @@ def run_docker_action(action):
                 'stop': ['stop'],
                 'prune': ['down', '--remove-orphans'],
                 'build_no_cache': ['build', '--no-cache'],
-                'prune_images': ['image', 'prune', '-a', '-f']
+                'prune_images': ['image', 'prune', '-a', '-f'],
+                'prune_containers': ['container', 'prune', '-f'] # Added for global container prune
              }
              if action not in cmd_map:
                  yield "data: Error: Unknown command.\n\n"
                  return
              
-             if action == 'prune_images':
+             if action == 'prune_images' or action == 'prune_containers':
+                 # These are global docker commands
                  full_cmd = ['docker'] + cmd_map[action]
                  yield f"data: --- Running global command: '{' '.join(full_cmd)}' ---\n\n"
-                 yield from stream_process(full_cmd)
+                 if action == 'prune_containers':
+                     # Also stop all running containers first for a full clean
+                     yield "data: --- Stopping all running containers first ---\n\n"
+                     yield from stream_process(['docker', 'stop', '$(docker ps -q)'], cwd='/')
+                 yield from stream_process(full_cmd, cwd='/')
              else:
+                 # Project-specific docker-compose commands
                  full_cmd = ['docker', 'compose', '-f', os.path.join(deploy_path, 'docker-compose.yml')] + cmd_map[action]
                  yield f"data: --- Running 'docker-compose {action}' ---\n\n"
                  yield from stream_process(full_cmd, cwd=deploy_path)

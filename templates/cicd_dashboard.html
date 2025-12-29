@@ -57,6 +57,7 @@
         <div class="controls-section">
             <h3>Global System Controls</h3>
             <div class="main-controls">
+                <button onclick="if(confirm('Are you sure you want to stop and remove ALL containers on this system? THIS IS A HIGHLY DESTRUCTIVE ACTION.')) runDockerAction('prune_containers')" class="btn-danger">Prune All Containers</button>
                 <button onclick="if(confirm('Are you sure you want to remove ALL unused Docker images on this system? This can affect other projects.')) runDockerAction('prune_images')" class="btn-danger">Prune All Images</button>
                 <button onclick="if(confirm('Are you sure you want to permanently delete the local repository folder for the selected project? This cannot be undone.')) runGitAction('delete_repo')" class="btn-danger">Delete Local Repo</button>
             </div>
