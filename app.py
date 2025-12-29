@@ -195,9 +195,13 @@ def run_git_action(action):
                 git_url = f"https://{config.GITHUB_PAT}@github.com/{repo_full_name}.git"
                 os.makedirs(deploy_path, exist_ok=True)
                 yield from stream_process(['git', 'clone', git_url, '.'], cwd=deploy_path)
+                yield "data: \n--- Repository contents after clone: ---\n\n"
+                yield from stream_process(['ls', '-aF'], cwd=deploy_path)
             else:
                 yield "data: --- Pulling latest changes from repository ---\n\n"
                 yield from stream_process(['git', 'pull'], cwd=deploy_path)
+                yield "data: \n--- Repository contents after pull: ---\n\n"
+                yield from stream_process(['ls', '-aF'], cwd=deploy_path)
             yield "data: \n--- Git operation complete ---\n\n"
         elif action == 'delete_repo':
             yield f"data: --- Deleting local repository at {deploy_path} ---\n\n"
