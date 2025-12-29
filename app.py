@@ -5,6 +5,8 @@ import time
 import json
 import shutil
 import logging
+import psutil
+from collections import deque
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
 from github import Github, GithubException
 import config
@@ -25,6 +27,33 @@ def log_request_info():
 
 # --- Constants ---
 REPO_CACHE_FILE = 'repo_cache.json'
+STATS_FILE = 'system_stats.log'
+MAX_STATS_LINES = 1000
+
+# --- System Stats Background Thread ---
+stats_thread = None
+stop_stats_thread = threading.Event()
+
+def collect_system_stats():
+    while not stop_stats_thread.is_set():
+        try:
+            cpu = psutil.cpu_percent()
+            ram = psutil.virtual_memory().percent
+            disk = psutil.disk_usage('/').percent
+            timestamp = int(time.time())
+            line = json.dumps({'ts': timestamp, 'cpu': cpu, 'ram': ram, 'disk': disk})
+            
+            lines = deque(maxlen=MAX_STATS_LINES - 1)
+            if os.path.exists(STATS_FILE):
+                with open(STATS_FILE, 'r') as f:
+                    lines.extend(f.readlines())
+            lines.append(line + '\n')
+            
+            with open(STATS_FILE, 'w') as f:
+                f.writelines(lines)
+        except Exception as e:
+            logging.error("Error in stats collection thread:", exc_info=True)
+        time.sleep(5)
 
 # --- Authentication & Login ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -109,7 +138,20 @@ def cicd_dashboard():
     return render_template('cicd_dashboard.html', selected_repo=session['selected_repo'])
 
 # --- API Endpoints ---
-@app.route('/api/containers', methods=['GET'])
+@app.route('/api/system_stats')
+@login_required
+def api_system_stats():
+    try:
+        if not os.path.exists(STATS_FILE):
+            return jsonify([])
+        with open(STATS_FILE, 'r') as f:
+            data = [json.loads(line) for line in f if line.strip()]
+        return jsonify(data)
+    except Exception as e:
+        logging.error("Error in /api/system_stats:", exc_info=True)
+        return jsonify({"error": "Failed to load system stats."} ), 500
+        
+@app.route('/api/containers')
 @login_required
 def api_containers():
     repo_name = session.get('selected_repo')
@@ -138,8 +180,8 @@ def api_containers():
                         'Image': c.get('Image'),
                         'Command': c.get('Command'),
                         'State': c.get('State'),
-                        'Status': c.get('Status'), # Detailed status like 'Up 5 seconds'
-                        'Ports': c.get('Ports', '') # Port mappings
+                        'Status': c.get('Status'),
+                        'Ports': c.get('Ports', '')
                     })
                 except json.JSONDecodeError:
                     logging.warning(f"Could not decode JSON line from docker compose ps: {line}")
@@ -164,8 +206,12 @@ def action_streamer(action_generator):
             yield from action_generator()
         except Exception as e:
             logging.error("Unhandled error in action stream:", exc_info=True)
-            yield f"data: --- PYTHON TRACEBACK ---\n\n"
-            yield f"data: An unhandled error occurred. See sakadeploy.log for details.\n\n"
+            yield f"data: --- PYTHON TRACEBACK ---
+
+"
+            yield f"data: An unhandled error occurred. See sakadeploy.log for details.
+
+"
     return Response(generate(), mimetype='text/event-stream')
 
 @app.route('/api/container_action/<service_name>/<action>', methods=['GET'])
@@ -174,25 +220,33 @@ def api_container_action(service_name, action):
     repo_name = session.get('selected_repo')
     deploy_path = os.path.join('/var/deploy', repo_name)
     compose_file = os.path.join(deploy_path, 'docker-compose.yml')
-    
     def generator():
         if action == 'rm -f':
-            # Stop first, then remove
-            yield f"data: --- Stopping container {service_name} ---\n\n"
+            yield f"data: --- Stopping container {service_name} ---
+
+"
             yield from stream_process(['docker', 'compose', '-f', compose_file, 'stop', service_name], cwd=deploy_path)
-            yield f"data: --- Removing container {service_name} ---\n\n"
+            yield f"data: --- Removing container {service_name} ---
+
+"
             yield from stream_process(['docker', 'compose', '-f', compose_file, 'rm', '-f', service_name], cwd=deploy_path)
-            yield f"data: --- Container {service_name} removed ---\n\n"
+            yield f"data: --- Container {service_name} removed ---
+
+"
         else:
-            # For other actions, proceed as before
             if action not in ['start', 'stop', 'restart']:
-                yield f"data: Error: Invalid action '{action}' for container {service_name}.\n\n"
+                yield f"data: Error: Invalid action '{action}' for container {service_name}.
+
+"
                 return
-            cmd = ['docker', 'compose', '-f', compose_file] + action.split() + [service_name]
-            yield f"data: --- Running 'docker compose {action} {service_name}' ---\n\n"
+            cmd = ['docker', 'compose', '-f', compose_file, action, service_name]
+            yield f"data: --- Running 'docker compose {action} {service_name}' ---
+
+"
             yield from stream_process(cmd, cwd=deploy_path)
-            yield f"data: --- Action '{action}' on '{service_name}' complete ---\n\n"
-    
+            yield f"data: --- Action '{action}' on '{service_name}' complete ---
+
+"
     return action_streamer(generator)
 
 @app.route('/run_git_action/<action>', methods=['GET'])
@@ -203,31 +257,57 @@ def run_git_action(action):
     deploy_path = os.path.join('/var/deploy', repo_name)
     def generator():
         if action == 'pull':
-            yield "data: --- Checking local repository ---\n\n"
+            yield "data: --- Checking local repository ---
+
+"
             if not os.path.exists(os.path.join(deploy_path, '.git')):
-                yield f"data: No local repository found. Cloning instead of pulling...\n\n"
+                yield f"data: No local repository found. Cloning instead of pulling...
+
+"
                 if not repo_full_name:
-                    yield "data: Error: Repo full name not in session. Cannot clone.\n\n"
+                    yield "data: Error: Repo full name not in session. Cannot clone.
+
+"
                     return
                 git_url = f"https://{config.GITHUB_PAT}@github.com/{repo_full_name}.git"
                 os.makedirs(deploy_path, exist_ok=True)
                 yield from stream_process(['git', 'clone', git_url, '.'], cwd=deploy_path)
-                yield "data: \n--- Repository contents after clone: ---\n\n"
+                yield "data: 
+--- Repository contents after clone: ---
+
+"
                 yield from stream_process(['ls', '-aF'], cwd=deploy_path)
             else:
-                yield "data: --- Pulling latest changes from repository ---\n\n"
+                yield "data: --- Pulling latest changes from repository ---
+
+"
                 yield from stream_process(['git', 'pull'], cwd=deploy_path)
-                yield "data: \n--- Repository contents after pull: ---\n\n"
+                yield "data: 
+--- Repository contents after pull: ---
+
+"
                 yield from stream_process(['ls', '-aF'], cwd=deploy_path)
-            yield "data: \n--- Git operation complete ---\n\n"
+            yield "data: 
+--- Git operation complete ---
+
+"
         elif action == 'delete_repo':
-            yield f"data: --- Deleting local repository at {deploy_path} ---\n\n"
+            yield f"data: --- Deleting local repository at {deploy_path} ---
+
+"
             if os.path.exists(deploy_path):
                 shutil.rmtree(deploy_path)
-                yield f"data: Successfully deleted {deploy_path}.\n\n"
+                yield f"data: Successfully deleted {deploy_path}.
+
+"
             else:
-                yield "data: Directory does not exist.\n\n"
-            yield "data: \n--- Deletion complete ---\n\n"
+                yield "data: Directory does not exist.
+
+"
+            yield "data: 
+--- Deletion complete ---
+
+"
     return action_streamer(generator)
 
 @app.route('/run_docker_action/<action>', methods=['GET'])
@@ -238,40 +318,82 @@ def run_docker_action(action):
     deploy_path = os.path.join('/var/deploy', repo_name)
     service = request.args.get('service', '')
     def generator():
-        if not repo_full_name:
-            yield "data: Error: Repo full name not in session.\n\n"
+        if not repo_full_name and action not in ['prune_images']:
+            yield "data: Error: Repo full name not in session.
+
+"
             return
-        git_url = f"https://{config.GITHUB_PAT}@github.com/{repo_full_name}.git"
         os.makedirs(deploy_path, exist_ok=True)
         if action == 'redeploy':
-            yield "data: --- Starting Full Redeployment ---\n\n"
+            git_url = f"https://{config.GITHUB_PAT}@github.com/{repo_full_name}.git"
+            yield "data: --- Starting Full Redeployment ---
+
+"
             if not os.path.exists(os.path.join(deploy_path, '.git')):
-                yield f"data: Step 1: Cloning repository...\n\n"
+                yield f"data: Step 1: Cloning repository...
+
+"
                 yield from stream_process(['git', 'clone', git_url, '.'], cwd=deploy_path)
             else:
-                yield "data: Step 1: Pulling latest changes...\n\n"
+                yield "data: Step 1: Pulling latest changes...
+
+"
                 yield from stream_process(['git', 'pull'], cwd=deploy_path)
-            yield "data: \n--- Step 2: Building and starting containers ---\n\n"
+            yield "data: 
+--- Step 2: Building and starting containers ---
+
+"
             yield from stream_process(['docker', 'compose', '-f', 'docker-compose.yml', 'up', '--build', '-d'], cwd=deploy_path)
-            yield "data: \n--- Redeployment complete ---\n\n"
+            yield "data: 
+--- Redeployment complete ---
+
+"
         elif action == 'logs':
-            yield f"data: --- Streaming logs for {'all services' if not service else service} ---\n\n"
+            yield f"data: --- Streaming logs for {'all services' if not service else service} ---
+
+"
             cmd = ['docker', 'compose', '-f', 'docker-compose.yml', 'logs', '--follow', '--tail=100']
             if service:
                 cmd.append(service)
             yield from stream_process(cmd, cwd=deploy_path)
         else:
-             cmd_map = {'stop': ['stop'], 'prune': ['down', '--remove-orphans'], 'build_no_cache': ['build', '--no-cache']}
+             cmd_map = {
+                'start': ['start'],
+                'stop': ['stop'],
+                'prune': ['down', '--remove-orphans'],
+                'build_no_cache': ['build', '--no-cache'],
+                'prune_images': ['image', 'prune', '-a', '-f']
+             }
              if action not in cmd_map:
-                 yield "data: Error: Unknown command.\n\n"
+                 yield "data: Error: Unknown command.
+
+"
                  return
-             yield f"data: --- Running 'docker-compose {action}' ---\n\n"
-             yield from stream_process(['docker', 'compose', '-f', 'docker-compose.yml'] + cmd_map[action], cwd=deploy_path)
-             yield f"data: \n--- Command '{action}' complete ---\n\n"
-    return action_streamer(lambda: generator())
+             
+             if action == 'prune_images':
+                 full_cmd = ['docker'] + cmd_map[action]
+                 yield f"data: --- Running global command: '{' '.join(full_cmd)}' ---
+
+"
+                 yield from stream_process(full_cmd, cwd='/')
+             else:
+                 full_cmd = ['docker', 'compose', '-f', 'docker-compose.yml'] + cmd_map[action]
+                 yield f"data: --- Running 'docker-compose {action}' ---
+
+"
+                 yield from stream_process(full_cmd, cwd=deploy_path)
+             yield f"data: 
+--- Command '{action}' complete ---
+
+"
+    return action_streamer(generator)
 
 if __name__ == '__main__':
-    logging.info("Starting Sakadeploy application.")
+    logging.info("Starting Sakadeploy application with System Monitoring.")
+    stats_thread = threading.Thread(target=collect_system_stats)
+    stats_thread.daemon = True
+    stats_thread.start()
+    
     try:
         app.run(host='0.0.0.0', port=8123, debug=False, ssl_context=('certs/cert.pem', 'certs/key.pem'))
     except FileNotFoundError:
@@ -279,3 +401,7 @@ if __name__ == '__main__':
         app.run(host='0.0.0.0', port=8123, debug=True)
     except Exception as e:
         logging.critical("Application failed to start.", exc_info=True)
+    finally:
+        stop_stats_thread.set()
+        if stats_thread:
+            stats_thread.join()

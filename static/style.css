@@ -59,13 +59,38 @@ h2, h3 {
     justify-content: space-between;
     gap: 20px;
     flex-wrap: wrap;
+    align-items: center;
 }
 .chart-wrapper {
     position: relative;
-    height: 300px;
+    height: 200px;
     flex: 1;
-    min-width: 300px;
+    min-width: 250px;
 }
+.disk-wrapper {
+    flex: 1;
+    min-width: 250px;
+    text-align: center;
+}
+.progress-bar-container {
+    width: 100%;
+    background-color: #e9ecef;
+    border-radius: .25rem;
+    height: 20px;
+}
+.progress-bar-fill {
+    height: 100%;
+    width: 0%; /* Will be updated by JS */
+    background-color: #007bff;
+    border-radius: .25rem;
+    transition: width 0.5s ease-in-out;
+}
+#diskUsageText {
+    margin-top: 5px;
+    font-weight: bold;
+    display: block;
+}
+
 
 /* Container Status Table */
 #container-list table {

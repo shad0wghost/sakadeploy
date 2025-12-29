@@ -51,6 +51,7 @@ function cleanup() {
     # Use git to revert config.py to its original state, ignoring errors if not a git repo
     git checkout HEAD -- config.py &> /dev/null || echo -e "${YELLOW}   Warning: Could not reset config.py via git. Proceeding anyway.${NC}"
     rm -rf certs
+    rm -f system_stats.log
     echo -e "${GREEN}   Cleanup complete.${NC}"
 }
 
@@ -99,7 +100,7 @@ fi
 # --- 2. Install Python Dependencies ---
 echo -e "\n${BLUE}>>> 2. Installing Python dependencies...${NC}"
 pip3 install --break-system-packages -r requirements.txt > /dev/null
-echo -e "${GREEN}   Python dependencies installed.${NC}"
+echo -e "${GREEN}   Python dependencies installed (Flask, PyGithub, cryptography, psutil).${NC}"
 
 # --- 2b. Create Log File ---
 echo -e "\n${BLUE}>>> Creating dedicated log file...${NC}"
