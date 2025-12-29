@@ -123,7 +123,7 @@ while true; do
 
     echo -e "${WHITE}   Validating GitHub PAT via API call...${NC}"
     # Use curl to test the token. -s is for silent, -o /dev/null discards body, -w "%{\http_code}" gets status code.
-    HTTP_STATUS=$(curl -s -o /dev/null -w "%{\http_code}" -H "Authorization: token $GITHUB_PAT" https://api.github.com/user)
+    HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: token $GITHUB_PAT" https://api.github.com/user)
 
     if [ "$HTTP_STATUS" -eq 200 ]; then
         echo -e "${GREEN}   Success! GitHub PAT is valid and authenticated correctly.${NC}"
