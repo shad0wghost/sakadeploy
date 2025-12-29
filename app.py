@@ -120,7 +120,7 @@ def api_containers():
     if not os.path.exists(compose_file):
         return jsonify([])
     try:
-        cmd = ['docker', 'compose', '-f', compose_file, 'ps', '--format', 'json']
+        cmd = ['docker', 'compose', '-f', compose_file, 'ps', '-a', '--format', 'json']
         result = subprocess.run(cmd, capture_output=True, text=True, cwd=deploy_path)
         if result.returncode != 0:
             logging.error(f"Docker compose ps failed: {result.stderr}")
@@ -182,15 +182,23 @@ def api_container_action(service_name, action):
 @login_required
 def run_git_action(action):
     repo_name = session.get('selected_repo')
+    repo_full_name = session.get('repo_full_name') # Needed for clone
     deploy_path = os.path.join('/var/deploy', repo_name)
     def generator():
         if action == 'pull':
+            yield "data: --- Checking local repository ---\n\n"
             if not os.path.exists(os.path.join(deploy_path, '.git')):
-                yield f"data: Error: Repo not cloned. Use 'Redeploy' first.\n\n"
-                return
-            yield "data: --- Pulling latest changes ---\n\n"
-            yield from stream_process(['git', 'pull'], cwd=deploy_path)
-            yield "data: \n--- Git pull complete ---\n\n"
+                yield f"data: No local repository found. Cloning instead of pulling...\n\n"
+                if not repo_full_name:
+                    yield "data: Error: Repo full name not in session. Cannot clone.\n\n"
+                    return
+                git_url = f"https://{config.GITHUB_PAT}@github.com/{repo_full_name}.git"
+                os.makedirs(deploy_path, exist_ok=True)
+                yield from stream_process(['git', 'clone', git_url, '.'], cwd=deploy_path)
+            else:
+                yield "data: --- Pulling latest changes from repository ---\n\n"
+                yield from stream_process(['git', 'pull'], cwd=deploy_path)
+            yield "data: \n--- Git operation complete ---\n\n"
         elif action == 'delete_repo':
             yield f"data: --- Deleting local repository at {deploy_path} ---\n\n"
             if os.path.exists(deploy_path):
@@ -234,7 +242,7 @@ def run_docker_action(action):
                 cmd.append(service_name)
             yield from stream_process(cmd, cwd=deploy_path)
         else:
-             cmd_map = {'stop': ['stop'], 'prune': ['down', '--remove-orphans'], 'build_no_cache': ['build', '--no-cache']}
+             cmd_map = {'start': ['start'], 'stop': ['stop'], 'prune': ['down', '--remove-orphans'], 'build_no_cache': ['build', '--no-cache']}
              if action not in cmd_map:
                  yield "data: Error: Unknown command.\n\n"
                  return

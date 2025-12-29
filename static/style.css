@@ -82,11 +82,12 @@ h2, h3 {
     background-color: #f8f9fa;
 }
 .status-indicator {
-    padding: 5px 10px;
+    padding: 3px 8px;
     border-radius: 12px;
     color: white;
     font-weight: bold;
     font-size: 0.9em;
+    display: inline-block; /* Ensure padding is respected */
 }
 .status-running { background-color: #28a745; }
 .status-stopped { background-color: #6c757d; }
