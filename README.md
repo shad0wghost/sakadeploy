@@ -1,108 +1,102 @@
-# SakaDeploy CI/CD management interface
+# SakaDeploy CI/CD Management Interface
 
 **Repository:** https://github.com/shad0wghost/sakadeploy
 
 ## Project Overview
 
-The Sakadeploy is a lightweight, self-hosted web application designed to simplify the continuous integration and continuous deployment (CICD) of Docker Compose-based projects on your remote server. It provides a secure, web-based control panel to manage your private GitHub repositories, deploy updates, monitor Docker container health, and view system resource utilization, all without needing direct SSH access or command-line interaction after initial setup.
+SakaDeploy is a lightweight, self-hosted web application that provides a powerful, user-friendly interface for managing your entire Docker environment and deploying Docker Compose-based projects from private GitHub repositories. It is designed to eliminate the need for repeated SSH access and command-line interaction, allowing you to control your server's Docker containers and project deployments from a secure web UI.
+
+The dashboard is split into two main concepts: **System-Wide Controls** for managing all containers and images on the server, and **Project-Specific Controls** for deploying and managing individual applications from Git.
 
 ### Key Features:
 
-*   **Secure Access:** Password-protected web interface accessible via HTTPS (with a self-signed certificate).
-*   **GitHub Integration:** Connects to your private GitHub repositories using a Personal Access Token (PAT).
-*   **Repository Discovery:** Automatically lists GitHub repositories containing a `docker-compose.yml` file, identifying them as deployable projects.
-*   **Centralized Deployment:** Clones and manages selected projects in a dedicated `/var/deploy/<project_name>` directory on your server.
-*   **Docker Compose Control:** Intuitive buttons for common Docker Compose operations:
-    *   `Redeploy`: Pulls latest code, rebuilds, and restarts services.
-    *   `Stop All`: Stops all services for the selected project.
-    *   `Prune (Down)`: Stops and removes containers, networks, and volumes for the selected project.
-    *   `Build (No Cache)`: Rebuilds services without using Docker's build cache.
-*   **Container-Specific Actions:** View individual containers, their status, and perform actions like `Start`, `Stop`, `Restart`, `Delete`, and `Logs` for each one.
-*   **Live Terminal Output:** Real-time streaming of all Docker Compose command outputs directly to the web interface for quick debugging.
-*   **System Resource Monitoring:** Live graphs for CPU, RAM, and Disk usage, providing a rolling window of recent historical data (stored in a text file, no database required).
-*   **Persistent Service:** Deploys as a systemd service, ensuring the interface starts automatically on server boot.
+*   **System-Wide Container Management:**
+    *   View all Docker containers on the system (running or stopped).
+    *   Perform actions on any container: `Start`, `Stop`, `Restart`, `Logs`, and `Delete`.
+    *   Highlighting for containers that belong to the currently selected deployment project.
+*   **Project Deployment from GitHub:**
+    *   Securely connects to your GitHub account using a Personal Access Token (PAT).
+    *   Intelligently caches your repository list for a fast and responsive UI.
+    *   Provides project-specific controls: `Redeploy (Pull & Build)`, `Git Pull`, `Start/Stop Project`, `Prune Project`, and `Build (No Cache)`.
+    *   Force-rebuild individual containers within a project.
+*   **Global System Controls:**
+    *   `Prune All Containers`: A powerful, one-click action to stop and remove every container on the system.
+    *   `Prune All Images`: Reclaim disk space by removing all unused Docker images.
+    *   `Delete Local Repo`: Remove a project's cloned repository from the server.
+*   **Live Monitoring & Feedback:**
+    *   Real-time dashboard with live-updating graphs for **CPU Usage**, **RAM Usage**, and **Network I/O** (Mbps).
+    *   Live progress bar for **Disk Usage**.
+    *   A live terminal output for all Git and Docker operations, showing you every step of the process.
+*   **Secure & Robust:**
+    *   Password-protected web interface.
+    *   Automated deployment script (`deploy.sh`) for easy installation, re-installation, and uninstallation.
+    *   Hardened against command injection vulnerabilities.
+    *   Runs as a persistent `systemd` service.
+
+## The Dashboard Explained
+
+![SakaDeploy Dashboard](https://i.imgur.com/your-screenshot-url.png) <!-- Replace with a real screenshot URL -->
+
+1.  **System Monitoring:** At the top, you get a live overview of your server's health.
+2.  **System-Wide Container Management:** This is your main Docker control panel. It lists *every* container on the host machine. Containers belonging to the project you've selected in the top-right dropdown are highlighted in blue. You can manage any container from here, regardless of which project it belongs to.
+3.  **Project Deployment Controls:** These actions are *specific to the repository you have selected*. For example, clicking "Stop Project" will only stop the containers defined in that project's `docker-compose.yml`.
+4.  **Global System Controls:** These are powerful, destructive actions that affect the entire Docker environment on your server, such as removing all containers or images.
+5.  **Live Output:** All actions you trigger will stream their full, unabbreviated terminal output here in real-time.
 
 ## Getting Started (Deployment)
 
-This project is designed to be deployed on a Linux server (tested on Debian/Ubuntu-based systems). The `deploy.sh` script automates the entire setup process.
+This project is designed for Debian/Ubuntu-based Linux servers.
 
 ### Prerequisites:
 
-*   A fresh Linux VPS (e.g., Ubuntu, Debian).
-*   Basic understanding of `sudo` and SSH.
-*   A GitHub Personal Access Token (PAT) with `repo` scope for accessing your private repositories. 
+*   A Linux VPS (e.g., Ubuntu, Debian).
+*   A GitHub Personal Access Token (PAT) with `repo` scope.
 
 ### Deployment Steps:
 
-1.  **Clone the Repository:** SSH into your remote server and clone this repository.
+1.  **Clone the Repository:** SSH into your remote server and clone the SakaDeploy repository.
 
     ```bash
     git clone https://github.com/shad0wghost/sakadeploy.git
     cd sakadeploy
     ```
 
-2.  **Run the Deployment Script:** Execute the `deploy.sh` script with `sudo`.
+2.  **Run the Deployment Script:** Execute the `deploy.sh` script with `sudo`. This script is idempotent, meaning you can re-run it at any time to perform a "factory reset" and start a fresh installation.
 
     ```bash
     sudo bash deploy.sh
     ```
 
-    The script will:
-    *   Update package lists and install necessary system dependencies (Docker, Docker Compose, Python3, pip3).
-    *   Prompt you for your GitHub PAT and validate it.
-    *   Prompt you to set a strong admin password for the web interface.
-    *   Update the `config.py` file with your provided credentials.
-    *   Generate a self-signed SSL certificate in the `certs/` directory.
-    *   Create the `/var/deploy` directory for project management.
-    *   Set up and start the `cicd_interface.service` as a systemd service, ensuring it runs persistently and starts on boot.
+    The script will guide you through the setup, including validating your GitHub PAT and creating an admin password. It automates everything: dependency installation, SSL certificate generation, and systemd service setup.
 
-3.  **Access the Web Interface:** After the script completes, it will display the URL to access your Sakadeploy.
-
-    ```
-    >>> You can access the web interface at: https://<YOUR_SERVER_IP>:8123
-    ```
-
-    Open this URL in your web browser. You will likely see a certificate warning because it's a self-signed certificate. You can safely proceed past this warning for a development/internal setup.
-
-4.  **Login:** Use the admin password you set during the `deploy.sh` script execution.
+3.  **Access the Web Interface:** After the script completes, it will display the URL to access your SakaDeploy instance (e.g., `https://<YOUR_SERVER_IP>:8123`).
 
 ## Usage
 
-Once logged in, you will be directed to the repository selection page:
-
-1.  **Select Repository:** Choose a GitHub repository from the dropdown. Only repositories containing a `docker-compose.yml` file will be listed.
-2.  **CICD Dashboard:** After selecting a repository, you'll see the main dashboard.
-    *   **System Monitoring:** View live CPU, RAM, and Disk usage graphs.
-    *   **Container Management:** See a list of your Docker containers for the selected project, their status, and buttons to `Start`, `Stop`, `Restart`, `Delete`, or view `Logs` for individual containers.
-    *   **Deployment Controls:** Use the main buttons (`Redeploy`, `Stop All`, etc.) to perform global actions on your selected Docker Compose project.
-    *   **Live Output:** All command outputs will stream in real-time to the console at the bottom of the page.
-
-## `cicd-test` Project (Example)
-
-Included in this repository is a sample project called `cicd-test` designed to demonstrate the capabilities of the interface. This project consists of two Docker containers:
-
-*   **`fileserver` (Nginx):** A simple Nginx container that hosts an `index.html` file.
-*   **`webserver` (Apache):** An Apache web server container that, on startup, fetches the `index.html` from the `fileserver` and then serves it on port 80.
-
-You can use this project to test the deployment and management features of your Sakadeploy. Simply push the `cicd-test` directory to a GitHub repository, and your interface should discover and allow you to deploy it.
+*   **Initial Login:** Use the admin password you set during deployment. You will be prompted to select a repository.
+*   **Selecting a Project:** The dropdown caches your repositories. If you've added a new repo to GitHub, click the "Refresh List" button to fetch it. Selecting a project will highlight its containers in the management table below and enable the "Project Deployment Controls".
+*   **First Deployment:** For a new project, click the green **"Redeploy (Pull & Build)"** button. This will clone the repository to `/var/deploy/<project_name>` and start the services defined in its `docker-compose.yml`.
+*   **Updating a Project:** To deploy an update you've pushed to Git, simply click **"Redeploy (Pull & Build)"** again. This will pull the latest code and intelligently restart only the necessary containers.
 
 ## Troubleshooting
 
-*   **Service not starting:** Check the systemd journal for errors:
+*   **Service fails to start:** The application is likely crashing due to a Python error. Check the detailed application logs, not just journalctl:
     ```bash
-    journalctl -u cicd_interface.service -f
+    tail -f /root/sakadeploy/sakadeploy.log
     ```
-*   **Docker commands failing:** Ensure the user running the service (`$SUDO_USER` from `deploy.sh`) has permissions to run Docker commands. You might need to log out and back in after deployment for `docker` group changes to take effect.
-*   **GitHub API errors:** Double-check your GitHub PAT and its scopes.
-*   **SSL certificate warnings:** These are expected with self-signed certificates. Proceed past the warning in your browser.
+*   **"Bad Credentials" error:** Your GitHub PAT is invalid, has expired, or (if you're using a GitHub Organization) has not been authorized for SSO. Generate a new token and re-run `sudo bash deploy.sh`.
+*   **CSS/Styles are broken:** Perform a hard refresh in your browser (Ctrl+Shift+R or Cmd+Shift+R) to clear its cache.
 
-## Development
+## Managing the Service
 
-To manage the service manually:
+*   **Uninstall SakaDeploy:**
+    ```bash
+    sudo bash /path/to/sakadeploy/deploy.sh down
+    ```
+*   **Manual Service Control:**
+    *   Restart: `sudo systemctl restart cicd_interface.service`
+    *   Stop: `sudo systemctl stop cicd_interface.service`
+    *   View Status: `systemctl status cicd_interface.service`
 
-*   Stop: `sudo systemctl stop cicd_interface.service`
-*   Start: `sudo systemctl start cicd_interface.service`
-*   Restart: `sudo systemctl restart cicd_interface.service`
-*   Disable (prevent auto-start): `sudo systemctl disable cicd_interface.service`
-*   View Status: `systemctl status cicd_interface.service`
-
+---
+*This README has been updated to reflect the final feature set of the SakaDeploy application.*
