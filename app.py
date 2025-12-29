@@ -206,7 +206,7 @@ def action_streamer(action_generator):
             yield from action_generator()
         except Exception as e:
             logging.error("Unhandled error in action stream:", exc_info=True)
-            yield f"data: --- PYTHON TRACEBACK ---
+            yield f"data: --- PYTHON TRACEBACK ---\n\n"
 
 "
             yield f"data: An unhandled error occurred. See sakadeploy.log for details.
