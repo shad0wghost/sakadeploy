@@ -41,6 +41,7 @@ h2, h3 {
 .monitoring-section, .container-section, .controls-section {
     background-color: #ffffff;
     padding: 20px;
+    padding-bottom: 30px; /* Added extra padding to prevent overflow */
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     margin-bottom: 30px;
