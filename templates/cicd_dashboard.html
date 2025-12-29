@@ -45,8 +45,8 @@
         <div class="controls-section">
             <h3>Project Deployment Controls <span class="repo-subtitle">{% if selected_repo %}({{ selected_repo }}){% else %}(No Project Selected){% endif %}</span></h3>
             <div class="main-controls">
+                <button onclick="runDockerAction('redeploy')" class="btn-success">Redeploy (Pull & Build)</button>
                 <button onclick="runGitAction('pull')">Git Pull</button>
-                <button onclick="runDockerAction('redeploy')">Redeploy (Pull & Build)</button>
                 <button onclick="runDockerAction('start')">Start Project</button>
                 <button onclick="runDockerAction('stop')">Stop Project</button>
                 <button onclick="runDockerAction('prune')">Prune Project</button>
@@ -186,7 +186,8 @@ function handleStream(url) {
     eventSource = new EventSource(url);
     eventSource.onmessage = function(event) {
         if (outputConsole.textContent === 'Connecting to stream...\n') { outputConsole.textContent = ''; }
-        outputConsole.textContent += event.data;
+        // Append the data, converting newlines to <br> and adding an extra <br> per message for consistent wrapping
+        outputConsole.innerHTML += event.data.replace(/\n/g, '<br>') + '<br>';
         outputConsole.scrollTop = outputConsole.scrollHeight;
     };
     eventSource.onerror = function(error) {

@@ -178,7 +178,13 @@ def api_containers():
             if line:
                 try:
                     container_data = json.loads(line)
-                    project_label = container_data.get('Labels', {}).get('com.docker.compose.project', '')
+                    # FIX: Manually parse the labels string
+                    labels_str = container_data.get('Labels', '')
+                    project_label = ''
+                    for label in labels_str.split(','):
+                        if 'com.docker.compose.project=' in label:
+                            project_label = label.split('=')[-1]
+                            break
                     container_data['is_project_container'] = (selected_project is not None and project_label.lower() == selected_project.lower())
                     containers.append(container_data)
                 except json.JSONDecodeError:
@@ -278,7 +284,6 @@ def run_docker_action(action):
     repo_full_name = session.get('repo_full_name')
     deploy_path = os.path.join('/var/deploy', repo_name)
     def generator():
-        #makedirs is safe to call even if the directory exists
         if repo_name:
             os.makedirs(deploy_path, exist_ok=True)
             
@@ -321,7 +326,6 @@ def run_docker_action(action):
                  yield f"data: --- Running global command: '{' '.join(full_cmd)}' ---\n\n"
                  yield from stream_process(full_cmd)
              else:
-                 # Project-specific docker-compose commands
                  full_cmd = ['docker', 'compose', '-f', os.path.join(deploy_path, 'docker-compose.yml')] + cmd_map[action]
                  yield f"data: --- Running 'docker-compose {action}' ---\n\n"
                  yield from stream_process(full_cmd, cwd=deploy_path)

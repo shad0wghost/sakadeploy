@@ -153,6 +153,8 @@ button:hover:not(:disabled) { background-color: #0056b3; }
 .action-buttons button { font-size: 12px; padding: 5px 10px; }
 .btn-danger { background-color: #dc3545; }
 .btn-danger:hover:not(:disabled) { background-color: #c82333; }
+.btn-success { background-color: #28a745; }
+.btn-success:hover:not(:disabled) { background-color: #218838; }
 .controls-wrapper {
     display: grid;
     grid-template-columns: 1fr 1fr;
