@@ -206,12 +206,8 @@ def action_streamer(action_generator):
             yield from action_generator()
         except Exception as e:
             logging.error("Unhandled error in action stream:", exc_info=True)
-            yield f"data: --- PYTHON TRACEBACK ---\n\n"
-
-"
-            yield f"data: An unhandled error occurred. See sakadeploy.log for details.
-
-"
+            yield f"data: --- PYTHON TRACEBACK ---\\n\\n"
+            yield f"data: An unhandled error occurred. See sakadeploy.log for details.\n\n"
     return Response(generate(), mimetype='text/event-stream')
 
 @app.route('/api/container_action/<service_name>/<action>', methods=['GET'])
@@ -222,31 +218,19 @@ def api_container_action(service_name, action):
     compose_file = os.path.join(deploy_path, 'docker-compose.yml')
     def generator():
         if action == 'rm -f':
-            yield f"data: --- Stopping container {service_name} ---
-
-"
+            yield f"data: --- Stopping container {service_name} ---\n\n"
             yield from stream_process(['docker', 'compose', '-f', compose_file, 'stop', service_name], cwd=deploy_path)
-            yield f"data: --- Removing container {service_name} ---
-
-"
+            yield f"data: --- Removing container {service_name} ---\n\n"
             yield from stream_process(['docker', 'compose', '-f', compose_file, 'rm', '-f', service_name], cwd=deploy_path)
-            yield f"data: --- Container {service_name} removed ---
-
-"
+            yield f"data: --- Container {service_name} removed ---\n\n"
         else:
             if action not in ['start', 'stop', 'restart']:
-                yield f"data: Error: Invalid action '{action}' for container {service_name}.
-
-"
+                yield f"data: Error: Invalid action '{action}' for container {service_name}.\n\n"
                 return
             cmd = ['docker', 'compose', '-f', compose_file, action, service_name]
-            yield f"data: --- Running 'docker compose {action} {service_name}' ---
-
-"
+            yield f"data: --- Running 'docker compose {action} {service_name}' ---\n\n"
             yield from stream_process(cmd, cwd=deploy_path)
-            yield f"data: --- Action '{action}' on '{service_name}' complete ---
-
-"
+            yield f"data: --- Action '{action}' on '{service_name}' complete ---\n\n"
     return action_streamer(generator)
 
 @app.route('/run_git_action/<action>', methods=['GET'])
@@ -257,57 +241,31 @@ def run_git_action(action):
     deploy_path = os.path.join('/var/deploy', repo_name)
     def generator():
         if action == 'pull':
-            yield "data: --- Checking local repository ---
-
-"
+            yield "data: --- Checking local repository ---\n\n"
             if not os.path.exists(os.path.join(deploy_path, '.git')):
-                yield f"data: No local repository found. Cloning instead of pulling...
-
-"
+                yield f"data: No local repository found. Cloning instead of pulling...\n\n"
                 if not repo_full_name:
-                    yield "data: Error: Repo full name not in session. Cannot clone.
-
-"
+                    yield "data: Error: Repo full name not in session. Cannot clone.\n\n"
                     return
                 git_url = f"https://{config.GITHUB_PAT}@github.com/{repo_full_name}.git"
                 os.makedirs(deploy_path, exist_ok=True)
                 yield from stream_process(['git', 'clone', git_url, '.'], cwd=deploy_path)
-                yield "data: 
---- Repository contents after clone: ---
-
-"
+                yield "data: \n--- Repository contents after clone: ---\n\n"
                 yield from stream_process(['ls', '-aF'], cwd=deploy_path)
             else:
-                yield "data: --- Pulling latest changes from repository ---
-
-"
+                yield "data: --- Pulling latest changes from repository ---\n\n"
                 yield from stream_process(['git', 'pull'], cwd=deploy_path)
-                yield "data: 
---- Repository contents after pull: ---
-
-"
+                yield "data: \n--- Repository contents after pull: ---\n\n"
                 yield from stream_process(['ls', '-aF'], cwd=deploy_path)
-            yield "data: 
---- Git operation complete ---
-
-"
+            yield "data: \n--- Git operation complete ---\n\n"
         elif action == 'delete_repo':
-            yield f"data: --- Deleting local repository at {deploy_path} ---
-
-"
+            yield f"data: --- Deleting local repository at {deploy_path} ---\n\n"
             if os.path.exists(deploy_path):
                 shutil.rmtree(deploy_path)
-                yield f"data: Successfully deleted {deploy_path}.
-
-"
+                yield f"data: Successfully deleted {deploy_path}.\n\n"
             else:
-                yield "data: Directory does not exist.
-
-"
-            yield "data: 
---- Deletion complete ---
-
-"
+                yield "data: Directory does not exist.\n\n"
+            yield "data: \n--- Deletion complete ---\n\n"
     return action_streamer(generator)
 
 @app.route('/run_docker_action/<action>', methods=['GET'])
@@ -319,39 +277,23 @@ def run_docker_action(action):
     service = request.args.get('service', '')
     def generator():
         if not repo_full_name and action not in ['prune_images']:
-            yield "data: Error: Repo full name not in session.
-
-"
+            yield "data: Error: Repo full name not in session.\n\n"
             return
         os.makedirs(deploy_path, exist_ok=True)
         if action == 'redeploy':
             git_url = f"https://{config.GITHUB_PAT}@github.com/{repo_full_name}.git"
-            yield "data: --- Starting Full Redeployment ---
-
-"
+            yield "data: --- Starting Full Redeployment---\n\n"
             if not os.path.exists(os.path.join(deploy_path, '.git')):
-                yield f"data: Step 1: Cloning repository...
-
-"
+                yield f"data: Step 1: Cloning repository...\n\n"
                 yield from stream_process(['git', 'clone', git_url, '.'], cwd=deploy_path)
             else:
-                yield "data: Step 1: Pulling latest changes...
-
-"
+                yield "data: Step 1: Pulling latest changes...\n\n"
                 yield from stream_process(['git', 'pull'], cwd=deploy_path)
-            yield "data: 
---- Step 2: Building and starting containers ---
-
-"
+            yield "data: \n--- Step 2: Building and starting containers ---\n\n"
             yield from stream_process(['docker', 'compose', '-f', 'docker-compose.yml', 'up', '--build', '-d'], cwd=deploy_path)
-            yield "data: 
---- Redeployment complete ---
-
-"
+            yield "data: \n--- Redeployment complete ---\n\n"
         elif action == 'logs':
-            yield f"data: --- Streaming logs for {'all services' if not service else service} ---
-
-"
+            yield f"data: --- Streaming logs for {'all services' if not service else service} ---\n\n"
             cmd = ['docker', 'compose', '-f', 'docker-compose.yml', 'logs', '--follow', '--tail=100']
             if service:
                 cmd.append(service)
@@ -365,27 +307,18 @@ def run_docker_action(action):
                 'prune_images': ['image', 'prune', '-a', '-f']
              }
              if action not in cmd_map:
-                 yield "data: Error: Unknown command.
-
-"
+                 yield "data: Error: Unknown command.\n\n"
                  return
              
              if action == 'prune_images':
                  full_cmd = ['docker'] + cmd_map[action]
-                 yield f"data: --- Running global command: '{' '.join(full_cmd)}' ---
-
-"
+                 yield f"data: --- Running global command: '{' '.join(full_cmd)}' ---\n\n"
                  yield from stream_process(full_cmd, cwd='/')
              else:
                  full_cmd = ['docker', 'compose', '-f', 'docker-compose.yml'] + cmd_map[action]
-                 yield f"data: --- Running 'docker-compose {action}' ---
-
-"
+                 yield f"data: --- Running 'docker-compose {action}' ---\n\n"
                  yield from stream_process(full_cmd, cwd=deploy_path)
-             yield f"data: 
---- Command '{action}' complete ---
-
-"
+             yield f"data: \n--- Command '{action}' complete ---\n\n"
     return action_streamer(generator)
 
 if __name__ == '__main__':
