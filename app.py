@@ -14,12 +14,21 @@ import config
 # --- Setup Logging ---
 logging.basicConfig(
     filename='sakadeploy.log',
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+
+@app.before_request
+def log_request_info():
+    """Log every incoming request for extreme verbosity."""
+    app.logger.debug('Request Headers: %s', request.headers)
+    app.logger.debug('Request Body: %s', request.get_data())
+    app.logger.debug('Request Path: %s', request.path)
+    app.logger.debug('Request Method: %s', request.method)
+
 
 # --- Constants ---
 STATS_FILE = 'system_stats.log'
@@ -170,7 +179,7 @@ def api_containers():
         logging.error("Error in /api/containers", exc_info=True)
         return jsonify({"error": "Failed to load container data."} ), 500
 
-@app.route('/api/container_action/<service_name>/<action>', methods=['POST'])
+@app.route('/api/container_action/<service_name>/<action>', methods=['GET'])
 @login_required
 def api_container_action(service_name, action):
     repo_name = session.get('selected_repo')
@@ -212,7 +221,7 @@ def action_streamer(action_generator):
             yield f"data: Error: {e}\n\n"
     return Response(generate(), mimetype='text/event-stream')
 
-@app.route('/run_git_action/<action>', methods=['POST'])
+@app.route('/run_git_action/<action>', methods=['GET'])
 @login_required
 def run_git_action(action):
     repo_name = session.get('selected_repo')
@@ -238,7 +247,7 @@ def run_git_action(action):
             yield "data: Error: Unknown Git action.\n\n"
     return action_streamer(generator)
 
-@app.route('/run_docker_action/<action>', methods=['POST'])
+@app.route('/run_docker_action/<action>', methods=['GET'])
 @login_required
 def run_docker_action(action):
     repo_name = session.get('selected_repo')
