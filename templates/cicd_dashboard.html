@@ -81,7 +81,8 @@ function handleStream(url, options = {}) {
         if (outputConsole.innerHTML === 'Connecting to stream...\n') {
             outputConsole.innerHTML = '';
         }
-        outputConsole.innerHTML += event.data.replace(/\\n/g, '\n');
+        // Create a text node to preserve whitespace and newlines
+        outputConsole.appendChild(document.createTextNode(event.data));
         outputConsole.scrollTop = outputConsole.scrollHeight;
     };
     eventSource.onerror = function(error) {
