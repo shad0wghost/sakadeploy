@@ -1,25 +1,40 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h2>Select Repository</h2>
-    
-    <div class="repo-selection-wrapper">
-        <form method="post" class="repo-select-form">
-            <label for="repo_name">Choose a repository:</label>
-            <select id="repo_name" name="repo_name" required>
-                {% for repo in repos %}
-                    <option value="{{ repo.name }}" {% if repo.name == selected_repo %}selected{% endif %}>{{ repo.name }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit">Select</button>
-        </form>
+    <div id="repo-select-wrapper">
+        <h2>Select Repository</h2>
+        
+        <div class="repo-selection-wrapper">
+            <form method="post" class="repo-select-form" id="repo-select-form">
+                <label for="repo_name">Choose a repository:</label>
+                <select id="repo_name" name="repo_name" required>
+                    {% for repo in repos %}
+                        <option value="{{ repo.name }}" {% if repo.name == selected_repo %}selected{% endif %}>{{ repo.name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit">Select</button>
+            </form>
 
-        <form method="post" action="{{ url_for('refresh_repos') }}" class="repo-refresh-form">
-            <button type="submit" class="refresh-btn">Refresh List</button>
-        </form>
+            <form method="post" action="{{ url_for('refresh_repos') }}" class="repo-refresh-form" id="repo-refresh-form">
+                <button type="submit" class="refresh-btn">Refresh List</button>
+            </form>
+        </div>
+
+        {% if selected_repo %}
+            <p class="current-selection">Currently selected: <strong>{{ selected_repo }}</strong></p>
+        {% endif %}
     </div>
 
-    {% if selected_repo %}
-        <p class="current-selection">Currently selected: <strong>{{ selected_repo }}</strong></p>
-    {% endif %}
+    <div id="loading-overlay" class="hidden">
+        <div class="spinner"></div>
+        <p>Refreshing repository list from GitHub, please wait...</p>
+    </div>
+
+<script>
+    document.getElementById('repo-refresh-form').addEventListener('submit', function() {
+        // Hide the form and show the spinner
+        document.getElementById('repo-select-wrapper').classList.add('hidden');
+        document.getElementById('loading-overlay').classList.remove('hidden');
+    });
+</script>
 {% endblock %}
