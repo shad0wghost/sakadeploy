@@ -98,10 +98,21 @@ h2, h3 {
     border-collapse: collapse;
     margin-top: 15px;
 }
-#container-list th, #container-list td {
+#container-list td {
     padding: 12px;
     text-align: left;
     border-bottom: 1px solid #dee2e6;
+    vertical-align: middle;
+}
+.project-container-row {
+    background-color: #e7f5ff; /* Light blue highlight */
+    border-left: 4px solid #007bff;
+}
+.command-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 #container-list th {
     background-color: #f8f9fa;
