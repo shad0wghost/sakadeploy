@@ -37,8 +37,8 @@ This project is designed to be deployed on a Linux server (tested on Debian/Ubun
 1.  **Clone the Repository:** SSH into your remote server and clone this repository.
 
     ```bash
-    git clone https://github.com/YOUR_USERNAME/cicd-mgmt-interface.git
-    cd cicd-mgmt-interface
+    git clone https://github.com/shad0wghost/sakadeploy.git
+    cd sakadeploy
     ```
 
 2.  **Run the Deployment Script:** Execute the `deploy.sh` script with `sudo`.
