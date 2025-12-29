@@ -195,8 +195,8 @@ function runContainerAction(serviceName, action) {
 document.addEventListener('DOMContentLoaded', function() {
     updateSystemStats();
     updateContainerStatus();
-    setInterval(updateSystemStats, 5000);
-    setInterval(updateContainerStatus, 3000);
+    setInterval(updateSystemStats, 1000); // Update stats every 1 second
+    setInterval(updateContainerStatus, 1000);
 });
 </script>
 {% endblock %}
