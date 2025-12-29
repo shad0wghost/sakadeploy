@@ -109,7 +109,7 @@ def cicd_dashboard():
     return render_template('cicd_dashboard.html', selected_repo=session['selected_repo'])
 
 # --- API Endpoints ---
-@app.route('/api/containers')
+@app.route('/api/containers', methods=['GET'])
 @login_required
 def api_containers():
     repo_name = session.get('selected_repo')
@@ -173,16 +173,33 @@ def action_streamer(action_generator):
 def api_container_action(service_name, action):
     repo_name = session.get('selected_repo')
     deploy_path = os.path.join('/var/deploy', repo_name)
-    if action not in ['start', 'stop', 'restart', 'rm -f']:
-        return jsonify({'status': 'error', 'message': 'Invalid action'}), 400
-    cmd = ['docker', 'compose', '-f', 'docker-compose.yml'] + action.split() + [service_name]
-    return Response(stream_process(cmd, cwd=deploy_path), mimetype='text/event-stream')
+    compose_file = os.path.join(deploy_path, 'docker-compose.yml')
+    
+    def generator():
+        if action == 'rm -f':
+            # Stop first, then remove
+            yield f"data: --- Stopping container {service_name} ---\n\n"
+            yield from stream_process(['docker', 'compose', '-f', compose_file, 'stop', service_name], cwd=deploy_path)
+            yield f"data: --- Removing container {service_name} ---\n\n"
+            yield from stream_process(['docker', 'compose', '-f', compose_file, 'rm', '-f', service_name], cwd=deploy_path)
+            yield f"data: --- Container {service_name} removed ---\n\n"
+        else:
+            # For other actions, proceed as before
+            if action not in ['start', 'stop', 'restart']:
+                yield f"data: Error: Invalid action '{action}' for container {service_name}.\n\n"
+                return
+            cmd = ['docker', 'compose', '-f', compose_file] + action.split() + [service_name]
+            yield f"data: --- Running 'docker compose {action} {service_name}' ---\n\n"
+            yield from stream_process(cmd, cwd=deploy_path)
+            yield f"data: --- Action '{action}' on '{service_name}' complete ---\n\n"
+    
+    return action_streamer(generator)
 
 @app.route('/run_git_action/<action>', methods=['GET'])
 @login_required
 def run_git_action(action):
     repo_name = session.get('selected_repo')
-    repo_full_name = session.get('repo_full_name') # Needed for clone
+    repo_full_name = session.get('repo_full_name')
     deploy_path = os.path.join('/var/deploy', repo_name)
     def generator():
         if action == 'pull':
@@ -219,10 +236,8 @@ def run_docker_action(action):
     repo_name = session.get('selected_repo')
     repo_full_name = session.get('repo_full_name')
     deploy_path = os.path.join('/var/deploy', repo_name)
-    
     service = request.args.get('service', '')
-
-    def generator(service_name):
+    def generator():
         if not repo_full_name:
             yield "data: Error: Repo full name not in session.\n\n"
             return
@@ -240,21 +255,20 @@ def run_docker_action(action):
             yield from stream_process(['docker', 'compose', '-f', 'docker-compose.yml', 'up', '--build', '-d'], cwd=deploy_path)
             yield "data: \n--- Redeployment complete ---\n\n"
         elif action == 'logs':
-            yield f"data: --- Streaming logs for {'all services' if not service_name else service_name} ---\n\n"
+            yield f"data: --- Streaming logs for {'all services' if not service else service} ---\n\n"
             cmd = ['docker', 'compose', '-f', 'docker-compose.yml', 'logs', '--follow', '--tail=100']
-            if service_name:
-                cmd.append(service_name)
+            if service:
+                cmd.append(service)
             yield from stream_process(cmd, cwd=deploy_path)
         else:
-             cmd_map = {'start': ['start'], 'stop': ['stop'], 'prune': ['down', '--remove-orphans'], 'build_no_cache': ['build', '--no-cache']}
+             cmd_map = {'stop': ['stop'], 'prune': ['down', '--remove-orphans'], 'build_no_cache': ['build', '--no-cache']}
              if action not in cmd_map:
                  yield "data: Error: Unknown command.\n\n"
                  return
              yield f"data: --- Running 'docker-compose {action}' ---\n\n"
              yield from stream_process(['docker', 'compose', '-f', 'docker-compose.yml'] + cmd_map[action], cwd=deploy_path)
              yield f"data: \n--- Command '{action}' complete ---\n\n"
-
-    return action_streamer(lambda: generator(service))
+    return action_streamer(lambda: generator())
 
 if __name__ == '__main__':
     logging.info("Starting Sakadeploy application.")
