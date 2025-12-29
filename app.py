@@ -221,7 +221,7 @@ def api_container_action(service_name, action):
     compose_file = os.path.join(deploy_path, 'docker-compose.yml')
     def generator():
         if action == 'rm -f':
-            yield f"data: --- Stopping container {service_name} ---
+            yield f"data: --- Stopping container {service_name} ---\n\n"
 
 "
             yield from stream_process(['docker', 'compose', '-f', compose_file, 'stop', service_name], cwd=deploy_path)
