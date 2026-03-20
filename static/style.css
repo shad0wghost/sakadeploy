@@ -156,10 +156,80 @@ button:hover:not(:disabled) { background-color: #0056b3; }
 .btn-danger:hover:not(:disabled) { background-color: #c82333; }
 .btn-success { background-color: #28a745; }
 .btn-success:hover:not(:disabled) { background-color: #218838; }
+.btn-secondary { background-color: #6c757d; }
+.btn-secondary:hover:not(:disabled) { background-color: #5a6268; }
+
 .controls-wrapper {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1.5fr 1fr;
     gap: 20px;
+}
+
+.sub-controls-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-top: 20px;
+    border-top: 1px solid #eee;
+    padding-top: 15px;
+}
+
+.control-group h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 1em;
+    color: #495057;
+}
+
+.flex-row {
+    display: flex;
+    gap: 5px;
+}
+
+.small-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.commit-list {
+    margin-top: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fafafa;
+    font-size: 0.85em;
+}
+
+.commit-list h5 {
+    margin: 5px;
+    font-size: 0.9em;
+    color: #6c757d;
+    position: sticky;
+    top: 0;
+    background: #fafafa;
+}
+
+.commit-item {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.commit-item:hover {
+    background: #e7f5ff;
+}
+
+.commit-item last-child {
+    border-bottom: none;
+}
+
+#git-branch-select {
+    flex-grow: 1;
+    padding: 5px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
 }
 
 /* Output Console */

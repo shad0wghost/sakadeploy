@@ -24,11 +24,10 @@ app.secret_key = os.urandom(24)
 @app.before_request
 def log_request_info():
     app.logger.debug(f"Request: {request.method} {request.path} from {request.remote_addr}")
-
 # --- Constants ---
 REPO_CACHE_FILE = 'repo_cache.json'
 STATS_FILE = 'system_stats.log'
-MAX_STATS_LINES = 1000
+MAX_STATS_LINES = 150
 STATS_INTERVAL_SECONDS = 2
 
 # --- System Stats Background Thread ---
@@ -62,8 +61,12 @@ def collect_system_stats():
                 with open(STATS_FILE, 'r') as f:
                     lines.extend(f.readlines())
             lines.append(line + '\n')
-            with open(STATS_FILE, 'w') as f:
+            
+            # Atomic write using a temporary file and rename
+            tmp_file = STATS_FILE + '.tmp'
+            with open(tmp_file, 'w') as f:
                 f.writelines(lines)
+            os.replace(tmp_file, STATS_FILE)
         except Exception as e:
             logging.error("Error in stats collection thread:", exc_info=True)
             time.sleep(STATS_INTERVAL_SECONDS)
@@ -109,11 +112,14 @@ def select_repo():
             fetched_repos = []
             for repo in user.get_repos():
                 try:
-                    repo.get_contents('/')
-                    fetched_repos.append({'name': repo.name, 'full_name': repo.full_name})
+                    # Check for REPO_WORKFLOW_FILE (docker-compose.yml)
+                    repo.get_contents(config.REPO_WORKFLOW_FILE)
+                    fetched_repos.append({'name': repo.name, 'full_name': repo.full_name, 'is_compatible': True})
                 except GithubException as e:
-                    if e.status == 404 and "This repository is empty" in e.data.get("message", ""):
-                        continue
+                    if e.status == 404:
+                         # Repo doesn't have the file, skip or mark as incompatible
+                         # For now, let's only list compatible ones
+                         continue
                     else:
                         flash(f"Error checking repo {repo.name}: {e.data.get('message', str(e))}", 'error')
                         logging.error(f"GitHub API error on repo {repo.name}: {e}")
@@ -126,9 +132,37 @@ def select_repo():
             cached_repos = []
             
     if request.method == 'POST':
-        session['selected_repo'] = request.form['repo_name']
-        session['repo_full_name'] = next((r['full_name'] for r in cached_repos if r['name'] == session['selected_repo']), None)
-        flash(f"Selected repository: {session['selected_repo']}")
+        repo_name = request.form['repo_name']
+        repo_full_name = next((r['full_name'] for r in cached_repos if r['name'] == repo_name), None)
+        
+        session['selected_repo'] = repo_name
+        session['repo_full_name'] = repo_full_name
+        
+        # Write selection back to config.py to persist it
+        try:
+            with open('config.py', 'r') as f:
+                lines = f.readlines()
+            
+            with open('config.py', 'w') as f:
+                for line in lines:
+                    if line.startswith('SELECTED_REPO ='):
+                        f.write(f"SELECTED_REPO = '{repo_name}'\n")
+                    elif line.startswith('SELECTED_REPO_FULL ='):
+                        f.write(f"SELECTED_REPO_FULL = '{repo_full_name}'\n")
+                    else:
+                        f.write(line)
+                
+                # Append if they didn't exist
+                if not any(l.startswith('SELECTED_REPO =') for l in lines):
+                    f.write(f"SELECTED_REPO = '{repo_name}'\n")
+                if not any(l.startswith('SELECTED_REPO_FULL =') for l in lines):
+                    f.write(f"SELECTED_REPO_FULL = '{repo_full_name}'\n")
+                    
+            flash(f"Selected repository: {repo_name} (Persisted to config)")
+        except Exception as e:
+             logging.error("Failed to write to config.py:", exc_info=True)
+             flash(f"Selected repo, but failed to save to config: {e}", 'warning')
+
         return redirect(url_for('cicd_dashboard'))
         
     return render_template('select_repo.html', repos=cached_repos, selected_repo=session.get('selected_repo'))
@@ -141,11 +175,112 @@ def refresh_repos():
         flash("Repository cache cleared.", 'success')
     return redirect(url_for('select_repo'))
 
+# --- Environment Variable Management ---
+@app.route('/api/get_env')
+@login_required
+def get_env():
+    repo_name = session.get('selected_repo')
+    if not repo_name:
+        return jsonify({"error": "No project selected"}), 400
+    
+    deploy_path = os.path.join('/var/deploy', repo_name)
+    env_path = os.path.join(deploy_path, '.env')
+    example_path = os.path.join(deploy_path, '.env.example')
+    
+    env_content = ""
+    if os.path.exists(env_path):
+        with open(env_path, 'r') as f:
+            env_content = f.read()
+    elif os.path.exists(example_path):
+        with open(example_path, 'r') as f:
+            env_content = f.read()
+            
+    return jsonify({
+        "content": env_content,
+        "has_example": os.path.exists(example_path),
+        "exists": os.path.exists(env_path)
+    })
+
+@app.route('/api/save_env', methods=['POST'])
+@login_required
+def save_env():
+    repo_name = session.get('selected_repo')
+    if not repo_name:
+        return jsonify({"error": "No project selected"}), 400
+    
+    content = request.json.get('content')
+    deploy_path = os.path.join('/var/deploy', repo_name)
+    os.makedirs(deploy_path, exist_ok=True)
+    env_path = os.path.join(deploy_path, '.env')
+    
+    try:
+        with open(env_path, 'w') as f:
+            f.write(content)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --- Git Info & Rollbacks ---
+@app.route('/api/git_info')
+@login_required
+def get_git_info():
+    repo_name = session.get('selected_repo')
+    if not repo_name:
+        return jsonify({"error": "No project selected"}), 400
+    
+    deploy_path = os.path.join('/var/deploy', repo_name)
+    if not os.path.exists(os.path.join(deploy_path, '.git')):
+        return jsonify({"error": "Repository not cloned yet"}), 404
+
+    try:
+        # Get current branch
+        branch_res = subprocess.run(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], cwd=deploy_path, capture_output=True, text=True)
+        current_branch = branch_res.stdout.strip()
+
+        # Get remote branches
+        subprocess.run(['git', 'fetch', '--all'], cwd=deploy_path, capture_output=True)
+        branches_res = subprocess.run(['git', 'branch', '-r'], cwd=deploy_path, capture_output=True, text=True)
+        branches = [b.strip().replace('origin/', '') for b in branches_res.stdout.strip().split('\n') if '->' not in b]
+
+        # Get recent commits
+        commits_res = subprocess.run(['git', 'log', '-n', '15', '--pretty=format:%h|%an|%ar|%s'], cwd=deploy_path, capture_output=True, text=True)
+        commits = []
+        for line in commits_res.stdout.strip().split('\n'):
+            if line:
+                parts = line.split('|')
+                if len(parts) == 4:
+                    h, a, r, s = parts
+                    commits.append({'hash': h, 'author': a, 'time': r, 'subject': s})
+
+        return jsonify({
+            "current_branch": current_branch,
+            "branches": sorted(list(set(branches))),
+            "commits": commits
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/run_git_checkout/<path:target>', methods=['GET'])
+@login_required
+def run_git_checkout(target):
+    repo_name = session.get('selected_repo')
+    deploy_path = os.path.join('/var/deploy', repo_name)
+    def generator():
+        yield f"data: --- Checking out {target} ---\\n\n"
+        yield from stream_process(['git', 'checkout', target], cwd=deploy_path)
+        yield "data: \n--- Checkout complete ---\\n\n"
+    return action_streamer(generator)
+
 # --- Main Dashboard ---
 @app.route('/')
 @app.route('/cicd')
 @login_required
 def cicd_dashboard():
+    # If session is empty but config has values, initialize session
+    if 'selected_repo' not in session and hasattr(config, 'SELECTED_REPO') and config.SELECTED_REPO:
+        session['selected_repo'] = config.SELECTED_REPO
+        session['repo_full_name'] = getattr(config, 'SELECTED_REPO_FULL', None)
+        
     return render_template('cicd_dashboard.html', selected_repo=session.get('selected_repo'))
 
 # --- API Endpoints ---
@@ -275,9 +410,12 @@ def run_git_action(action):
                 yield "data: \n--- Repository contents after clone: ---\\n\n"
                 yield from stream_process(['ls', '-aF'], cwd=deploy_path)
             else:
-                yield "data: --- Pulling latest changes from repository ---\\n\n"
-                yield from stream_process(['git', 'pull'], cwd=deploy_path)
-                yield "data: \n--- Repository contents after pull: ---\\n\n"
+                yield "data: --- Resetting to latest code (main branch) and pulling ---\\n\n"
+                # First, make sure we are on main branch to avoid issues with detached HEADs
+                yield from stream_process(['git', 'checkout', 'main'], cwd=deploy_path)
+                yield from stream_process(['git', 'fetch', '--all'], cwd=deploy_path)
+                yield from stream_process(['git', 'reset', '--hard', 'origin/main'], cwd=deploy_path)
+                yield "data: \n--- Repository contents after reset/pull: ---\\n\n"
                 yield from stream_process(['ls', '-aF'], cwd=deploy_path)
             yield "data: \n--- Git operation complete ---\\n\n"
         elif action == 'delete_repo':

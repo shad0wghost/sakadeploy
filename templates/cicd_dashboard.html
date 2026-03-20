@@ -53,6 +53,33 @@
                 <button onclick="runDockerAction('build_no_cache')">Build (No Cache)</button>
                 <button onclick="runDockerAction('logs')">Project Logs</button>
             </div>
+            
+            <div class="sub-controls-row">
+                <div class="control-group">
+                    <h4>Git Branch/Commit (Rollback)</h4>
+                    <div class="flex-row">
+                        <select id="git-branch-select" onchange="checkoutTarget(this.value)">
+                            <option value="">Select Branch...</option>
+                        </select>
+                        <button onclick="updateGitInfo()" class="small-btn">↻</button>
+                    </div>
+                    <div id="recent-commits" class="commit-list">
+                        <!-- Commits will be loaded here -->
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <h4>Environment (.env)</h4>
+                    <button onclick="toggleEnvEditor()" class="btn-secondary">Edit .env File</button>
+                    <div id="env-editor-container" style="display: none; margin-top: 10px;">
+                        <textarea id="env-content" style="width: 100%; height: 200px; font-family: monospace;"></textarea>
+                        <div class="flex-row" style="margin-top: 5px;">
+                            <button onclick="saveEnv()" class="btn-success small-btn">Save .env</button>
+                            <button onclick="toggleEnvEditor()" class="small-btn">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
         <div class="controls-section">
             <h3>Global System Controls</h3>
@@ -66,12 +93,19 @@
 
     <!-- Live Output Console -->
     <div class="output-section">
-        <h3>Live Output</h3>
+        <div class="container-header">
+            <h3>Live Output</h3>
+            <label style="font-size: 0.9em; cursor: pointer;">
+                <input type="checkbox" id="autoscroll-toggle" checked> Auto-scroll to bottom
+            </label>
+        </div>
         <pre id="output-console"></pre>
     </div>
 
 <script>
 // --- Charting & Monitoring Logic ---
+const MAX_DATA_POINTS = 150; // 5 minutes at 2s intervals
+
 function createChart(ctx, label, yLabel = '%') {
     return new Chart(ctx, {
         type: 'line',
@@ -79,7 +113,8 @@ function createChart(ctx, label, yLabel = '%') {
         options: {
             scales: { y: { beginAtZero: true, ticks: { callback: value => value + yLabel } }, x: { ticks: { display: false } } },
             plugins: { legend: { display: false } },
-            responsive: true, maintainAspectRatio: false
+            responsive: true, maintainAspectRatio: false,
+            animation: false
         }
     });
 }
@@ -97,7 +132,8 @@ const netChart = new Chart(document.getElementById('netChart').getContext('2d'),
     options: {
         scales: { y: { beginAtZero: true, ticks: { callback: value => value + ' Mbps' } }, x: { ticks: { display: false } } },
         plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12 } } },
-        responsive: true, maintainAspectRatio: false
+        responsive: true, maintainAspectRatio: false,
+        animation: false
     }
 });
 
@@ -107,22 +143,24 @@ async function updateSystemStats() {
         const data = await response.json();
         if (!data || data.length === 0) return;
 
-        const labels = data.map(d => new Date(d.ts * 1000).toLocaleTimeString());
+        // Keep only last MAX_DATA_POINTS
+        const displayData = data.slice(-MAX_DATA_POINTS);
+        const labels = displayData.map(d => new Date(d.ts * 1000).toLocaleTimeString());
         
         cpuChart.data.labels = labels;
-        cpuChart.data.datasets[0].data = data.map(d => d.cpu);
+        cpuChart.data.datasets[0].data = displayData.map(d => d.cpu);
         cpuChart.update('none');
 
         ramChart.data.labels = labels;
-        ramChart.data.datasets[0].data = data.map(d => d.ram);
+        ramChart.data.datasets[0].data = displayData.map(d => d.ram);
         ramChart.update('none');
         
         netChart.data.labels = labels;
-        netChart.data.datasets[0].data = data.map(d => d.net_sent);
-        netChart.data.datasets[1].data = data.map(d => d.net_recv);
+        netChart.data.datasets[0].data = displayData.map(d => d.net_sent);
+        netChart.data.datasets[1].data = displayData.map(d => d.net_recv);
         netChart.update('none');
 
-        const latestDiskUsage = data[data.length - 1].disk;
+        const latestDiskUsage = displayData[displayData.length - 1].disk;
         document.getElementById('diskProgressBar').style.width = latestDiskUsage + '%';
         document.getElementById('diskUsageText').textContent = latestDiskUsage.toFixed(1) + '%';
     } catch (error) {
@@ -130,7 +168,7 @@ async function updateSystemStats() {
     }
 }
 
-// --- Container Management Logic (with Highlighting) ---
+// --- Container Management Logic ---
 async function updateContainerStatus() {
     try {
         const response = await fetch('/api/containers');
@@ -181,7 +219,71 @@ async function updateContainerStatus() {
         containerListDiv.innerHTML = html;
     } catch (error) {
         console.error('Error fetching container status:', error);
-        document.getElementById('container-list').innerHTML = '<p class="error">Failed to load container status.</p>';
+    }
+}
+
+// --- Git & Environment Actions ---
+async function updateGitInfo() {
+    try {
+        const response = await fetch('/api/git_info');
+        const data = await response.json();
+        if (data.error) return;
+
+        const branchSelect = document.getElementById('git-branch-select');
+        branchSelect.innerHTML = '<option value="">Select Branch...</option>';
+        data.branches.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b;
+            opt.textContent = b + (b === data.current_branch ? ' (current)' : '');
+            if (b === data.current_branch) opt.selected = true;
+            branchSelect.appendChild(opt);
+        });
+
+        const commitList = document.getElementById('recent-commits');
+        commitList.innerHTML = '<h5>Recent Commits (Click to Rollback)</h5>';
+        data.commits.forEach(c => {
+            const div = document.createElement('div');
+            div.className = 'commit-item';
+            div.onclick = () => checkoutTarget(c.hash);
+            div.innerHTML = `<strong>${c.hash}</strong> - ${c.subject} <br><small>${c.author} (${c.time})</small>`;
+            commitList.appendChild(div);
+        });
+    } catch (e) { console.error('Error fetching git info:', e); }
+}
+
+function checkoutTarget(target) {
+    if (!target) return;
+    if (confirm(`Switch code to ${target}?`)) {
+        handleStream(`/run_git_checkout/${encodeURIComponent(target)}`);
+    }
+}
+
+async function toggleEnvEditor() {
+    const container = document.getElementById('env-editor-container');
+    const textarea = document.getElementById('env-content');
+    if (container.style.display === 'none') {
+        const res = await fetch('/api/get_env');
+        const data = await res.json();
+        textarea.value = data.content || '';
+        container.style.display = 'block';
+    } else {
+        container.style.display = 'none';
+    }
+}
+
+async function saveEnv() {
+    const content = document.getElementById('env-content').value;
+    const res = await fetch('/api/save_env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content })
+    });
+    const data = await res.json();
+    if (data.status === 'success') {
+        alert('.env file saved successfully!');
+        toggleEnvEditor();
+    } else {
+        alert('Error saving .env: ' + data.error);
     }
 }
 
@@ -195,32 +297,25 @@ function handleStream(url) {
     eventSource = new EventSource(url);
     eventSource.onmessage = function(event) {
         if (outputConsole.textContent === 'Connecting to stream...\n') { outputConsole.innerHTML = ''; }
-        // Force line breaks by using innerHTML and appending <br>
         outputConsole.innerHTML += event.data.replace(/\n/g, '<br>') + '<br>';
-        outputConsole.scrollTop = outputConsole.scrollHeight;
+        
+        if (document.getElementById('autoscroll-toggle').checked) {
+            outputConsole.scrollTop = outputConsole.scrollHeight;
+        }
     };
     eventSource.onerror = function(error) {
         outputConsole.innerHTML += '<br>--- Stream closed ---<br>';
         outputConsole.scrollTop = outputConsole.scrollHeight;
         eventSource.close();
-        setTimeout(updateContainerStatus, 1000); 
+        setTimeout(() => { updateContainerStatus(); updateGitInfo(); }, 1000); 
     };
 }
 
-// Project-specific actions
-function runDockerAction(action) {
-    handleStream(`/run_docker_action/${action}`);
-}
-function runGitAction(action) {
-    handleStream(`/run_git_action/${action}`);
-}
-
-// Global container-specific actions
+function runDockerAction(action) { handleStream(`/run_docker_action/${action}`); }
+function runGitAction(action) { handleStream(`/run_git_action/${action}`); }
 function runContainerAction(containerId, action, serviceName = '') {
     let url = `/api/container_action/${containerId}/${action}`;
-    if (serviceName) {
-        url += `?service_name=${serviceName}`;
-    }
+    if (serviceName) url += `?service_name=${serviceName}`;
     handleStream(url);
 }
 
@@ -228,8 +323,9 @@ function runContainerAction(containerId, action, serviceName = '') {
 document.addEventListener('DOMContentLoaded', function() {
     updateSystemStats();
     updateContainerStatus();
-    setInterval(updateSystemStats, 1000);
-    setInterval(updateContainerStatus, 1000);
+    updateGitInfo();
+    setInterval(updateSystemStats, 2000);
+    setInterval(updateContainerStatus, 5000); // Less frequent container updates to save context
 });
 </script>
 {% endblock %}
