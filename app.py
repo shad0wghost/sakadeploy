@@ -220,6 +220,27 @@ def save_env():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/restore_env_example', methods=['POST'])
+@login_required
+def restore_env_example():
+    repo_name = session.get('selected_repo')
+    if not repo_name:
+        return jsonify({"error": "No project selected"}), 400
+        
+    deploy_path = os.path.join('/var/deploy', repo_name)
+    env_path = os.path.join(deploy_path, '.env')
+    example_path = os.path.join(deploy_path, '.env.example')
+    
+    if not os.path.exists(example_path):
+        return jsonify({"error": ".env.example does not exist"}), 404
+        
+    try:
+        import shutil
+        shutil.copy2(example_path, env_path)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"error": f"Failed to restore: {str(e)}"}), 500
+
 # --- Git Info & Rollbacks ---
 @app.route('/api/git_info')
 @login_required

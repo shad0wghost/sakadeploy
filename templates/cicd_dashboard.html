@@ -69,12 +69,13 @@
                 </div>
                 
                 <div class="control-group">
-                    <h4>Environment (.env)</h4>
+                    <h4>Environment (.env) <span id="envStatusBadge" style="font-size: 0.8em; margin-left: 10px; padding: 2px 6px; border-radius: 4px;"></span></h4>
                     <button onclick="toggleEnvEditor()" class="btn-secondary">Edit .env File</button>
                     <div id="env-editor-container" style="display: none; margin-top: 10px;">
                         <textarea id="env-content" style="width: 100%; height: 200px; font-family: monospace;"></textarea>
-                        <div class="flex-row" style="margin-top: 5px;">
+                        <div class="flex-row" style="margin-top: 5px; gap: 5px;">
                             <button onclick="saveEnv()" class="btn-success small-btn">Save .env</button>
+                            <button onclick="restoreEnvExample()" id="btn-restore-env" class="btn-warning small-btn" style="display: none;">Restore from .env.example</button>
                             <button onclick="toggleEnvEditor()" class="small-btn">Cancel</button>
                         </div>
                     </div>
@@ -261,13 +262,40 @@ function checkoutTarget(target) {
 async function toggleEnvEditor() {
     const container = document.getElementById('env-editor-container');
     const textarea = document.getElementById('env-content');
+    const badge = document.getElementById('envStatusBadge');
+    const restoreBtn = document.getElementById('btn-restore-env');
+
     if (container.style.display === 'none') {
         const res = await fetch('/api/get_env');
         const data = await res.json();
         textarea.value = data.content || '';
+        
+        // Update Badge
+        if (data.exists) {
+            badge.textContent = "Live (.env Active)";
+            badge.style.backgroundColor = "rgba(40, 167, 69, 0.2)";
+            badge.style.color = "#28a745";
+            badge.style.border = "1px solid #28a745";
+        } else if (data.has_example) {
+            badge.textContent = "Using Example (.env Missing)";
+            badge.style.backgroundColor = "rgba(255, 193, 7, 0.2)";
+            badge.style.color = "#ffc107";
+            badge.style.border = "1px solid #ffc107";
+        } else {
+            badge.textContent = "No .env found";
+            badge.style.backgroundColor = "rgba(108, 117, 125, 0.2)";
+            badge.style.color = "#6c757d";
+            badge.style.border = "1px solid #6c757d";
+        }
+
+        // Toggle Restore button visibility
+        restoreBtn.style.display = data.has_example ? 'inline-block' : 'none';
+
         container.style.display = 'block';
     } else {
         container.style.display = 'none';
+        badge.textContent = "";
+        badge.style.border = "none";
     }
 }
 
@@ -281,9 +309,27 @@ async function saveEnv() {
     const data = await res.json();
     if (data.status === 'success') {
         alert('.env file saved successfully!');
-        toggleEnvEditor();
+        toggleEnvEditor(); // Close to clear state
     } else {
         alert('Error saving .env: ' + data.error);
+    }
+}
+
+async function restoreEnvExample() {
+    if (!confirm('Are you sure you want to overwrite your current .env file with .env.example? This will erase your current settings.')) {
+        return;
+    }
+    
+    const res = await fetch('/api/restore_env_example', { method: 'POST' });
+    const data = await res.json();
+    
+    if (data.status === 'success') {
+        alert('.env restored from .env.example successfully!');
+        // Refresh the editor
+        document.getElementById('env-editor-container').style.display = 'none';
+        toggleEnvEditor();
+    } else {
+        alert('Error restoring .env: ' + data.error);
     }
 }
 
